@@ -217,10 +217,14 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
   const n = analistas.length
   if (!n) return null
 
-  // Separar analista de trasnocho (el último de la lista, rotativo)
-  const TRASNOCHO = { inicio: '16:00', fin: null, label: '16-00', startH: 16, endH: 24 }
-  const analistaTrasnocho = (forzarTrasnocho && n > 1) ? analistas[n - 1] : null
-  const analistasReg = analistaTrasnocho ? analistas.slice(0, -1) : analistas
+  const startOfYear = new Date(lunes.getFullYear(), 0, 1)
+  const weekOfYear  = Math.floor((lunes - startOfYear) / (7 * 86400000))
+
+  // Separar analista de trasnocho — rota cada semana según weekOfYear
+  const TRASNOCHO = { inicio: '22:00', fin: '06:00', label: '22-06', startH: 22, endH: 30 }
+  const trasnochIdx = weekOfYear % n
+  const analistaTrasnocho = (forzarTrasnocho && n > 1) ? analistas[trasnochIdx] : null
+  const analistasReg = analistaTrasnocho ? analistas.filter((_, i) => i !== trasnochIdx) : analistas
   const nReg = analistasReg.length
 
   const required = Array.from({ length: 7 }, (_, d) => {
@@ -234,9 +238,6 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
 
   const shifts = findBestShifts(required)
   if (!shifts.length) return null
-
-  const startOfYear = new Date(lunes.getFullYear(), 0, 1)
-  const weekOfYear  = Math.floor((lunes - startOfYear) / (7 * 86400000))
 
   const assignments = analistasReg.map((analista, idx) => {
     const shiftIdx = (weekOfYear + idx) % shifts.length
@@ -1071,7 +1072,7 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
                   className="rounded text-indigo-600 w-3.5 h-3.5"
                 />
                 <div>
-                  <p className="text-xs font-medium text-gray-700">Incluir turno trasnocho (16:00 – 00:00)</p>
+                  <p className="text-xs font-medium text-gray-700">Incluir turno trasnocho (22:00 – 06:00)</p>
                   <p className="text-[10px] text-gray-400">El último analista de la lista rotará en turno nocturno toda la semana</p>
                 </div>
               </label>
