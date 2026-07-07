@@ -1503,35 +1503,34 @@ function BreaksMonitor() {
       : variante === 'proximo' ? 'bg-white border-gray-200'
       : 'bg-gray-50/50 border-gray-100'
 
+    const tipoBadge = e.tipo === 'pausa'
+      ? <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-700">☕ Break</span>
+      : <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-teal-100 text-teal-700">🍽️ Almuerzo</span>
+
     return (
       <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${bg}`}>
-        <span className={`text-lg shrink-0 ${variante === 'tarde' ? 'opacity-40' : ''}`}>
-          {e.tipo === 'pausa' ? '☕' : '🍽️'}
-        </span>
         <div className="flex-1 min-w-0">
-          <p className={`text-sm font-medium truncate ${variante === 'tarde' ? 'text-gray-500' : 'text-gray-800'}`}>
-            {e.agente?.split(' ').slice(0, 2).join(' ')}
+          <div className="flex items-center gap-2 mb-0.5">
+            <p className={`text-sm font-medium truncate ${variante === 'tarde' ? 'text-gray-400' : 'text-gray-800'}`}>
+              {e.agente?.split(' ').slice(0, 2).join(' ')}
+            </p>
+            {variante === 'tarde' ? <span className="opacity-50">{tipoBadge}</span> : tipoBadge}
+          </div>
+          <p className="text-xs text-gray-500 font-medium">
+            {e.iniStr} – {e.finStr}
+            {e.linea ? <span className="text-gray-400 font-normal"> · {e.linea}</span> : null}
           </p>
-          <p className="text-xs text-gray-400">{e.iniStr} – {e.finStr}{e.linea ? ` · ${e.linea}` : ''}</p>
         </div>
         <div className="text-right shrink-0">
           {variante === 'activo' && (
-            <>
-              <p className={`text-xs font-semibold ${e.tipo === 'pausa' ? 'text-amber-700' : 'text-teal-700'}`}>
-                {e.tipo === 'pausa' ? 'Pausa' : 'Almuerzo'}
-              </p>
-              <p className="text-[10px] text-gray-400">
-                termina en {minLeft !== null ? Math.max(0, Math.round(minLeft)) : 0} min
-              </p>
-            </>
+            <p className="text-[11px] text-gray-400">
+              termina en {minLeft !== null ? Math.max(0, Math.round(minLeft)) : 0} min
+            </p>
           )}
           {variante === 'proximo' && (
-            <>
-              <p className={`text-xs font-semibold ${urgent ? 'text-orange-600' : 'text-gray-600'}`}>
-                {fmtMin(minAway)}
-              </p>
-              <p className="text-[10px] text-gray-400">{e.tipo === 'pausa' ? 'Pausa' : 'Almuerzo'}</p>
-            </>
+            <p className={`text-xs font-semibold ${urgent ? 'text-orange-600' : 'text-gray-500'}`}>
+              {fmtMin(minAway)}
+            </p>
           )}
           {variante === 'tarde' && (
             <p className="text-xs text-gray-400">{fmtMin(minAway)}</p>
