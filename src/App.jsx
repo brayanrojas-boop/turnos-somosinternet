@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './contexts/AuthContext'
 import Login from './pages/Login'
 import TurnosPage from './pages/TurnosPage'
+import WFMPage from './pages/WFMPage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -29,6 +30,9 @@ export default function App() {
           } />
           <Route path="/" element={
             <ProtectedRoute><TurnosPage /></ProtectedRoute>
+          } />
+          <Route path="/wfm" element={
+            <ProtectedRoute><WFMPage /></ProtectedRoute>
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
