@@ -1,4 +1,4 @@
-﻿import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
 import {
@@ -26,7 +26,7 @@ const NOMBRE_TURNO_KEY  = 'vip_nombre_turno'
 const SHEET_IMPORT_KEY  = 'vip_sheet_import_url'
 
 const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
-const DIAS  = ['Domingo','Lunes','Martes','MiÃ©rcoles','Jueves','Viernes','SÃ¡bado']
+const DIAS  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
 
 function getLunes(offset = 0) {
   const hoy = new Date()
@@ -40,16 +40,16 @@ function getLunes(offset = 0) {
 }
 
 function toISO(d) { return d.toISOString().slice(0, 10) }
-function formatH(h) { return h ? h.slice(0, 5) : 'â€”' }
+function formatH(h) { return h ? h.slice(0, 5) : '—' }
 function localDateISO() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 function esHoy(f) { return f === localDateISO() }
 
 function labelSemana(lunes, domingo) {
-  return `${lunes.getDate()} ${MESES[lunes.getMonth()]} â€“ ${domingo.getDate()} ${MESES[domingo.getMonth()]} ${domingo.getFullYear()}`
+  return `${lunes.getDate()} ${MESES[lunes.getMonth()]} – ${domingo.getDate()} ${MESES[domingo.getMonth()]} ${domingo.getFullYear()}`
 }
 
 function formatFecha(f) {
-  if (!f) return 'â€”'
+  if (!f) return '—'
   const d = new Date(f + 'T12:00:00')
   return `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`
 }
@@ -106,7 +106,7 @@ function ModalidadBadge({ email }) {
   )
 }
 
-// â”€â”€ ValidaciÃ³n bÃ¡sica â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Validación básica ─────────────────────────────────────────────────────────
 function esDescanso(turno) { return !turno?.turno_inicio }
 
 function validar8h(tSol, tRec, t) {
@@ -118,7 +118,7 @@ function validar8h(tSol, tRec, t) {
     err.push(t('turnos.errMismaLinea', { linea: tSol.linea_atencion }))
   if (dSol <= ahora) err.push(t('turnos.errTurnoPasado'))
   if (dRec <= ahora) err.push(t('turnos.errTurnoOtroPasado'))
-  // Si alguno es dÃ­a de descanso, no aplica la restricciÃ³n de 8h de anticipaciÃ³n
+  // Si alguno es día de descanso, no aplica la restricción de 8h de anticipación
   if (!esDescanso(tSol) && !esDescanso(tRec)) {
     const i1 = new Date(`${tSol.fecha}T${tSol.turno_inicio}`).getTime()
     const i2 = new Date(`${tRec.fecha}T${tRec.turno_inicio}`).getTime()
@@ -146,7 +146,7 @@ function validarCambio(tSol, tRec, turnosSol, turnosRec, t) {
   return { errores, advertencias }
 }
 
-// â”€â”€ Modal: cambio desde MIS TURNOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Modal: cambio desde MIS TURNOS ────────────────────────────────────────────
 function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesActivas, nombreEfectivo, onClose, onCreado }) {
   const { t } = useTranslation()
   const [elegido, setElegido] = useState(null)
@@ -161,9 +161,9 @@ function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesAct
 
   const disponibles = todosLosTurnos.filter(t => {
     if (t.agente?.toLowerCase() === mombre) return false
-    // Excluir solo si tiene turno_inicio Y ya pasÃ³
+    // Excluir solo si tiene turno_inicio Y ya pasó
     if (t.turno_inicio && new Date(`${t.fecha}T${t.turno_inicio}`) <= Date.now()) return false
-    // Excluir si no tiene turno_inicio Y la fecha ya pasÃ³ (descansos en fechas pasadas)
+    // Excluir si no tiene turno_inicio Y la fecha ya pasó (descansos en fechas pasadas)
     if (!t.turno_inicio && new Date(t.fecha + 'T23:59:59') <= Date.now()) return false
     if (miTurno.linea_atencion && t.linea_atencion && t.linea_atencion !== miTurno.linea_atencion) return false
     const bloq = solicitudesActivas.some(s =>
@@ -200,7 +200,7 @@ function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesAct
         <div className="flex items-start justify-between px-6 py-4 border-b shrink-0">
           <div>
             <h2 className="font-semibold text-gray-900">{t('turnos.solicitarCambio')}</h2>
-            <p className="text-xs text-gray-500 mt-0.5">{t('turnos.tuTurnoCeder')}: <strong>{formatFecha(miTurno.fecha)}</strong> {formatH(miTurno.turno_inicio)}â€“{formatH(miTurno.turno_fin)}</p>
+            <p className="text-xs text-gray-500 mt-0.5">{t('turnos.tuTurnoCeder')}: <strong>{formatFecha(miTurno.fecha)}</strong> {formatH(miTurno.turno_inicio)}–{formatH(miTurno.turno_fin)}</p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-gray-600" /></button>
         </div>
@@ -222,7 +222,7 @@ function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesAct
                     className="mt-1 text-xs font-semibold text-amber-700 underline hover:text-amber-900 transition">
                     Ignorar advertencia y continuar de todos modos
                   </button>
-                : <p className="text-xs text-amber-600 font-medium">âœ“ Advertencia ignorada â€” puedes enviar la solicitud</p>
+                : <p className="text-xs text-amber-600 font-medium">✓ Advertencia ignorada — puedes enviar la solicitud</p>
               }
             </div>
           )}
@@ -241,10 +241,10 @@ function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesAct
                         <span className="text-sm font-medium">{formatFecha(turno.fecha)}</span>
                         {esDescanso(turno)
                           ? <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Descanso</span>
-                          : <span className="text-xs text-gray-500">{formatH(turno.turno_inicio)} â€“ {formatH(turno.turno_fin)}</span>
+                          : <span className="text-xs text-gray-500">{formatH(turno.turno_inicio)} – {formatH(turno.turno_fin)}</span>
                         }
                       </div>
-                      {turno.linea_atencion && <p className="text-xs text-gray-400 mt-0.5">{turno.linea_atencion}{turno.tipo_turno ? ` Â· ${turno.tipo_turno}` : ''}</p>}
+                      {turno.linea_atencion && <p className="text-xs text-gray-400 mt-0.5">{turno.linea_atencion}{turno.tipo_turno ? ` · ${turno.tipo_turno}` : ''}</p>}
                     </div>
                   ))}
                 </div>
@@ -269,7 +269,7 @@ function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesAct
   )
 }
 
-// â”€â”€ Modal: cambio desde MALLA â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Modal: cambio desde MALLA ─────────────────────────────────────────────────
 function SolicitarDesdeMallaModal({ turnoObjetivo, solicitudesActivas, nombreEfectivo, onClose, onCreado }) {
   const { t } = useTranslation()
   const [misFuturos, setMisFuturos]   = useState([])
@@ -321,8 +321,8 @@ function SolicitarDesdeMallaModal({ turnoObjetivo, solicitudesActivas, nombreEfe
           <div>
             <h2 className="font-semibold text-gray-900">{t('turnos.solicitarCambio')}</h2>
             <p className="text-xs text-gray-500 mt-0.5">
-              {t('turnos.quieresElTurno')} <strong>{turnoObjetivo.agente}</strong>: {formatFecha(turnoObjetivo.fecha)} {formatH(turnoObjetivo.turno_inicio)}â€“{formatH(turnoObjetivo.turno_fin)}
-              {turnoObjetivo.linea_atencion && <span className="text-gray-400"> Â· {turnoObjetivo.linea_atencion}</span>}
+              {t('turnos.quieresElTurno')} <strong>{turnoObjetivo.agente}</strong>: {formatFecha(turnoObjetivo.fecha)} {formatH(turnoObjetivo.turno_inicio)}–{formatH(turnoObjetivo.turno_fin)}
+              {turnoObjetivo.linea_atencion && <span className="text-gray-400"> · {turnoObjetivo.linea_atencion}</span>}
             </p>
           </div>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-gray-600" /></button>
@@ -351,9 +351,9 @@ function SolicitarDesdeMallaModal({ turnoObjetivo, solicitudesActivas, nombreEfe
                     className={`border rounded-xl p-3 cursor-pointer transition ${elegido?.fecha===turno.fecha&&elegido?.turno_inicio===turno.turno_inicio?'border-primary-500 bg-primary-50':'border-gray-200 hover:border-primary-300 hover:bg-gray-50'}`}>
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium">{formatFecha(turno.fecha)}</span>
-                      <span className="text-xs text-gray-500">{formatH(turno.turno_inicio)} â€“ {formatH(turno.turno_fin)}</span>
+                      <span className="text-xs text-gray-500">{formatH(turno.turno_inicio)} – {formatH(turno.turno_fin)}</span>
                     </div>
-                    {turno.linea_atencion && <p className="text-xs text-gray-400 mt-0.5">{turno.linea_atencion}{turno.tipo_turno ? ` Â· ${turno.tipo_turno}` : ''}</p>}
+                    {turno.linea_atencion && <p className="text-xs text-gray-400 mt-0.5">{turno.linea_atencion}{turno.tipo_turno ? ` · ${turno.tipo_turno}` : ''}</p>}
                   </div>
                 ))}
               </div>
@@ -376,14 +376,14 @@ function SolicitarDesdeMallaModal({ turnoObjetivo, solicitudesActivas, nombreEfe
   )
 }
 
-// â”€â”€ Modal: cambiar dÃ­a de descanso â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Modal: cambiar día de descanso ────────────────────────────────────────────
 function CambiarDescansoModal({ miDescanso, turnosSemana, solicitudesActivas, nombreEfectivo, onClose, onCreado }) {
   const [elegido, setElegido] = useState(null)
   const [saving, setSaving]   = useState(false)
 
   const nombre = nombreEfectivo.toLowerCase()
 
-  // Derivar lÃ­nea de atenciÃ³n desde turnos no-descanso (los descansos suelen tener linea null)
+  // Derivar línea de atención desde turnos no-descanso (los descansos suelen tener linea null)
   const lineaDeAnalista = {}
   for (const t of turnosSemana) {
     if (!esDescanso(t) && t.agente && t.linea_atencion)
@@ -433,7 +433,7 @@ function CambiarDescansoModal({ miDescanso, turnosSemana, solicitudesActivas, no
         <div className="flex items-start justify-between px-6 py-4 border-b shrink-0">
           <div>
             <h2 className="font-semibold text-gray-900 flex items-center gap-2">
-              <Moon className="w-4 h-4 text-emerald-600"/> Cambiar dÃ­a de descanso
+              <Moon className="w-4 h-4 text-emerald-600"/> Cambiar día de descanso
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">Tu descanso: <strong>{formatFecha(miDescanso.fecha)}</strong></p>
           </div>
@@ -444,7 +444,7 @@ function CambiarDescansoModal({ miDescanso, turnosSemana, solicitudesActivas, no
             ? <p className="text-sm text-gray-400 text-center py-8">No hay analistas disponibles para cambiar descanso esta semana.</p>
             : (
               <>
-                <p className="text-sm text-gray-600">Â¿Con quiÃ©n quieres cambiar tu dÃ­a de descanso?</p>
+                <p className="text-sm text-gray-600">¿Con quién quieres cambiar tu día de descanso?</p>
                 <div className="space-y-2">
                   {Object.entries(porAnalista).map(([ag, descanso]) => (
                     <div key={ag} onClick={() => setElegido(elegido?.agente === ag ? null : descanso)}
@@ -459,8 +459,8 @@ function CambiarDescansoModal({ miDescanso, turnosSemana, solicitudesActivas, no
                 {elegido && (
                   <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-800 space-y-1">
                     <p className="font-medium mb-1">Si {elegido.agente} acepta:</p>
-                    <p>â†’ TÃº descansarÃ¡s el <strong>{formatFecha(elegido.fecha)}</strong></p>
-                    <p>â†’ {elegido.agente} descansarÃ¡ el <strong>{formatFecha(miDescanso.fecha)}</strong></p>
+                    <p>→ Tú descansarás el <strong>{formatFecha(elegido.fecha)}</strong></p>
+                    <p>→ {elegido.agente} descansará el <strong>{formatFecha(miDescanso.fecha)}</strong></p>
                   </div>
                 )}
               </>
@@ -471,7 +471,7 @@ function CambiarDescansoModal({ miDescanso, turnosSemana, solicitudesActivas, no
           <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Cancelar</button>
           <button onClick={submit} disabled={!elegido || saving}
             className="flex-1 px-4 py-2 bg-emerald-700 text-white rounded-lg text-sm font-medium hover:bg-emerald-800 disabled:opacity-50">
-            {saving ? 'Enviandoâ€¦' : 'Enviar solicitud'}
+            {saving ? 'Enviando…' : 'Enviar solicitud'}
           </button>
         </div>
       </div>
@@ -479,7 +479,7 @@ function CambiarDescansoModal({ miDescanso, turnosSemana, solicitudesActivas, no
   )
 }
 
-// â”€â”€ Modal: editar turno programado â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Modal: editar turno programado ───────────────────────────────────────────
 function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scriptUrl, scriptSecret }) {
   const isNuevo = !turno.id
   const [descanso,  setDescanso]  = useState(!turno.turno_inicio)
@@ -560,7 +560,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
             <p className="text-xs text-gray-500 mt-0.5">
               {isNuevo
                 ? formatFecha(turno.fecha)
-                : <><strong>{turno.agente}</strong> Â· {formatFecha(turno.fecha)}</>
+                : <><strong>{turno.agente}</strong> · {formatFecha(turno.fecha)}</>
               }
             </p>
           </div>
@@ -588,7 +588,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
               </button>
               <button onClick={() => setDescanso(true)}
                 className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${descanso ? 'bg-emerald-600 text-white border-emerald-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
-                ðŸŒ™ DÃ­a descanso
+                🌙 Día descanso
               </button>
             </div>
           </div>
@@ -603,7 +603,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
 
               {/* Break */}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Break â˜•</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Break ☕</p>
                 <div className="grid grid-cols-2 gap-3">
                   <TimeInput label="Inicio" value={brkIni} onChange={setBrkIni} optional/>
                   <TimeInput label="Fin" value={brkFin} onChange={setBrkFin} optional/>
@@ -612,7 +612,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
 
               {/* Lunch */}
               <div>
-                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Almuerzo ðŸ½</p>
+                <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Almuerzo 🍽</p>
                 <div className="grid grid-cols-2 gap-3">
                   <TimeInput label="Inicio" value={lchIni} onChange={setLchIni} optional/>
                   <TimeInput label="Fin" value={lchFin} onChange={setLchFin} optional/>
@@ -621,10 +621,10 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
             </>
           )}
 
-          {/* LÃ­nea de atenciÃ³n */}
+          {/* Línea de atención */}
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1">
-              LÃ­nea de atenciÃ³n <span className="text-gray-400 font-normal">(opcional)</span>
+              Línea de atención <span className="text-gray-400 font-normal">(opcional)</span>
             </label>
             <input type="text" value={linea} onChange={e => setLinea(e.target.value)}
               list="lineas-list" placeholder="Ej: Especializado"
@@ -640,7 +640,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
               Novedad <span className="text-gray-400 font-normal">(opcional)</span>
             </label>
             <input type="text" value={novedad} onChange={e => setNovedad(e.target.value)}
-              placeholder="Ej: Incapacidad, Vacaciones, Permisoâ€¦"
+              placeholder="Ej: Incapacidad, Vacaciones, Permiso…"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"/>
           </div>
 
@@ -655,7 +655,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
           <button onClick={guardar} disabled={!puedeGuardar || saving}
             className="flex-1 px-4 py-2 bg-primary-700 text-white rounded-lg text-sm font-medium hover:bg-primary-800 disabled:opacity-50 flex items-center justify-center gap-2">
             <Pencil className="w-3.5 h-3.5"/>
-            {saving ? 'Guardandoâ€¦' : isNuevo ? 'Crear turno' : 'Guardar cambios'}
+            {saving ? 'Guardando…' : isNuevo ? 'Crear turno' : 'Guardar cambios'}
           </button>
         </div>
       </div>
@@ -663,7 +663,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
   )
 }
 
-// â”€â”€ Modal: reportar horas extra â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Modal: reportar horas extra ──────────────────────────────────────────────
 function ReportarHEModal({ nombreEfectivo, onClose, onCreado }) {
   const hoyStr = localDateISO()
   const [fecha,      setFecha]   = useState(hoyStr)
@@ -724,7 +724,7 @@ function ReportarHEModal({ nombreEfectivo, onClose, onCreado }) {
           {necesitaAprobacion && (
             <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5 flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5"/>
-              <p className="text-xs text-amber-800">MÃ¡s de 2 horas requiere autorizaciÃ³n expresa. Indica quiÃ©n aprobÃ³ estas horas adicionales.</p>
+              <p className="text-xs text-amber-800">Más de 2 horas requiere autorización expresa. Indica quién aprobó estas horas adicionales.</p>
             </div>
           )}
 
@@ -732,7 +732,7 @@ function ReportarHEModal({ nombreEfectivo, onClose, onCreado }) {
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Aprobado por <span className="text-red-500">*</span></label>
               <input type="text" value={aprobadoPor} onChange={e => setApob(e.target.value)}
-                placeholder="Nombre del supervisor que autorizÃ³"
+                placeholder="Nombre del supervisor que autorizó"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500"/>
             </div>
           )}
@@ -740,10 +740,10 @@ function ReportarHEModal({ nombreEfectivo, onClose, onCreado }) {
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1">
               Comentario <span className="text-red-500">*</span>
-              <span className="text-gray-400 font-normal ml-1">â€” Â¿quÃ© trabajo adicional realizaste?</span>
+              <span className="text-gray-400 font-normal ml-1">— ¿qué trabajo adicional realizaste?</span>
             </label>
             <textarea value={comentario} onChange={e => setCom(e.target.value)} rows={3}
-              placeholder="Ej: Cubrimiento turno, soporte urgente cliente VIP, gestiÃ³n incidencia crÃ­ticaâ€¦"
+              placeholder="Ej: Cubrimiento turno, soporte urgente cliente VIP, gestión incidencia crítica…"
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-orange-500"/>
           </div>
 
@@ -754,7 +754,7 @@ function ReportarHEModal({ nombreEfectivo, onClose, onCreado }) {
           <button onClick={onClose} className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">Cancelar</button>
           <button onClick={submit} disabled={!puedeEnviar || saving}
             className="flex-1 px-4 py-2 bg-orange-500 text-white rounded-lg text-sm font-medium hover:bg-orange-600 disabled:opacity-50">
-            {saving ? 'Guardandoâ€¦' : 'Reportar horas extra'}
+            {saving ? 'Guardando…' : 'Reportar horas extra'}
           </button>
         </div>
       </div>
@@ -762,10 +762,10 @@ function ReportarHEModal({ nombreEfectivo, onClose, onCreado }) {
   )
 }
 
-// â”€â”€ Calendario semanal estilo time-grid â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Calendario semanal estilo time-grid ──────────────────────────────────────
 const CAL_PX_H  = 52
 const CAL_H_INI = 6    // eje: 06:00
-const CAL_H_FIN = 26   // eje: 26:00 = 02:00 del dÃ­a siguiente
+const CAL_H_FIN = 26   // eje: 26:00 = 02:00 del día siguiente
 const CAL_ALTO  = (CAL_H_FIN - CAL_H_INI) * CAL_PX_H
 
 const CAL_HORAS = Array.from({ length: CAL_H_FIN - CAL_H_INI }, (_, i) => {
@@ -773,7 +773,7 @@ const CAL_HORAS = Array.from({ length: CAL_H_FIN - CAL_H_INI }, (_, i) => {
   return `${String(h).padStart(2, '0')}:00`
 })
 
-// Paleta de colores por lÃ­nea de atenciÃ³n
+// Paleta de colores por línea de atención
 const PALETA_CAL = [
   { bg: '#171717', light: '#d4d4d4' },  // black
   { bg: '#404040', light: '#e5e5e5' },  // dark gray
@@ -833,7 +833,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
         )}
         {diaDescanso && (
           <span className="text-xs bg-emerald-100 text-emerald-700 font-semibold px-2.5 py-1 rounded-full">
-            ðŸŒ™ Descanso: {formatFecha(diaDescanso.fecha)}
+            🌙 Descanso: {formatFecha(diaDescanso.fecha)}
           </span>
         )}
         {misTurnos.length === 0 && (
@@ -843,7 +843,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
 
       {/* Grid */}
       <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-        {/* Header dÃ­as */}
+        {/* Header días */}
         <div className="flex border-b border-gray-200 bg-gray-50">
           <div className="w-10 shrink-0 border-r border-gray-200"/>
           {diasSemana.map(fecha => {
@@ -877,7 +877,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
               ))}
             </div>
 
-            {/* Columnas dÃ­as */}
+            {/* Columnas días */}
             {diasSemana.map(fecha => {
               const turno = pf[fecha]
               const esH   = fecha === hoyStr
@@ -898,12 +898,12 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
               return (
                 <div key={fecha}
                   className={`flex-1 min-w-0 relative border-r border-gray-200 last:border-r-0 ${esH ? 'bg-primary-50/20' : ''}`}>
-                  {/* LÃ­neas por hora */}
+                  {/* Líneas por hora */}
                   {CAL_HORAS.map((_, i) => (
                     <div key={i} className="absolute left-0 right-0 border-t border-gray-100" style={{ top: i * CAL_PX_H }}/>
                   ))}
 
-                  {/* LÃ­nea "ahora" */}
+                  {/* Línea "ahora" */}
                   {esH && nowTop >= 0 && nowTop <= CAL_ALTO && (
                     <div className="absolute left-0 right-0 z-20 pointer-events-none" style={{ top: nowTop }}>
                       <div className="border-t-2 border-red-400 border-dashed w-full"/>
@@ -914,12 +914,12 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                   {/* Descanso */}
                   {turno && esD && (
                     <div className="absolute inset-x-0.5 top-1 bottom-1 rounded border-2 border-dashed border-emerald-400 bg-emerald-50 flex flex-col items-center justify-center gap-0.5 p-1">
-                      <span className="text-sm">ðŸŒ™</span>
+                      <span className="text-sm">🌙</span>
                       <span className="text-[9px] font-semibold text-emerald-700 text-center">Descanso</span>
                       {!tieneActiva && esFuturo && (
                         <button onClick={() => onDescanso(turno)}
                           className="text-[8px] bg-emerald-200 hover:bg-emerald-300 text-emerald-800 px-1 py-0.5 rounded transition mt-0.5">
-                          Cambiar â†’
+                          Cambiar →
                         </button>
                       )}
                     </div>
@@ -939,7 +939,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                           return (
                             <div className="absolute left-0 right-0 flex items-center gap-0.5 overflow-hidden"
                               style={{ top: bt, height: bh, backgroundColor: 'rgba(0,0,0,0.32)', borderTop: '1px solid rgba(255,255,255,0.25)', borderBottom: '1px solid rgba(255,255,255,0.25)' }}>
-                              <span className="text-[9px] leading-none px-0.5 text-white/90">â˜•</span>
+                              <span className="text-[9px] leading-none px-0.5 text-white/90">☕</span>
                               <span className="text-[8px] text-white/70">{formatH(turno.break_inicio)}</span>
                             </div>
                           )
@@ -952,7 +952,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                           return (
                             <div className="absolute left-0 right-0 flex items-center gap-0.5 overflow-hidden"
                               style={{ top: lt, height: lh, backgroundColor: 'rgba(0,0,0,0.32)', borderTop: '1px solid rgba(255,255,255,0.25)', borderBottom: '1px solid rgba(255,255,255,0.25)' }}>
-                              <span className="text-[9px] leading-none px-0.5 text-white/90">ðŸ½</span>
+                              <span className="text-[9px] leading-none px-0.5 text-white/90">🍽</span>
                               {lh >= 18 && <span className="text-[8px] text-white/70">{formatH(turno.lunch_inicio)}</span>}
                             </div>
                           )
@@ -961,7 +961,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                         {/* Contenido */}
                         <div className="relative z-10 p-1">
                           <p className="text-[9px] font-bold text-white leading-tight">
-                            {formatH(turno.turno_inicio)}â€“{formatH(turno.turno_fin)}
+                            {formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}
                           </p>
                           {turno.linea_atencion && (
                             <p className="text-[8px] truncate font-medium" style={{ color: color.light }}>{turno.linea_atencion}</p>
@@ -972,7 +972,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                               style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
                               onMouseEnter={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.3)'}
                               onMouseLeave={e => e.target.style.backgroundColor = 'rgba(255,255,255,0.2)'}>
-                              â‡„ Cambiar
+                              ⇄ Cambiar
                             </button>
                           )}
                           {tieneActiva && (
@@ -998,7 +998,7 @@ function offsetParaFecha(dateStr) {
   return Math.floor((target.getTime() - lunes.getTime()) / (7 * 24 * 3600000))
 }
 
-// â”€â”€ Calendario mensual estilo iOS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Calendario mensual estilo iOS ─────────────────────────────────────────────
 const MESES_LARGO = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre']
 
 function CalendarioMes({ nombre, onNavegar }) {
@@ -1053,7 +1053,7 @@ function CalendarioMes({ nombre, onNavegar }) {
         </button>
       </div>
 
-      {/* Encabezado dÃ­as */}
+      {/* Encabezado días */}
       <div className="grid grid-cols-7 border-b border-gray-100">
         {['L','M','X','J','V','S','D'].map((d, i) => (
           <div key={d} className={`text-center py-1.5 text-[10px] font-semibold select-none ${i >= 5 ? 'text-gray-300' : 'text-gray-400'}`}>
@@ -1062,7 +1062,7 @@ function CalendarioMes({ nombre, onNavegar }) {
         ))}
       </div>
 
-      {/* CuadrÃ­cula */}
+      {/* Cuadrícula */}
       {cargandoMes ? (
         <div className="grid grid-cols-7">
           {Array.from({ length: 35 }, (_, i) => (
@@ -1095,7 +1095,7 @@ function CalendarioMes({ nombre, onNavegar }) {
                   isWeekend ? 'bg-gray-50/40' : ''
                 } ${isHoy ? 'bg-gray-100/60' : ''} hover:bg-black/[0.03]`}
               >
-                {/* NÃºmero del dÃ­a */}
+                {/* Número del día */}
                 <span className={`text-[11px] font-bold w-5 h-5 flex items-center justify-center rounded-full leading-none shrink-0 ${
                   isHoy        ? 'bg-gray-800 text-white' :
                   isWeekend    ? 'text-gray-300' :
@@ -1107,11 +1107,11 @@ function CalendarioMes({ nombre, onNavegar }) {
                 {/* Evento descanso */}
                 {isDesc && (
                   <div className="w-full rounded-[4px] px-1 py-1 border-l-[2px] border-emerald-400 bg-emerald-50">
-                    <p className="text-[8px] font-semibold text-emerald-700 leading-none">ðŸŒ™ Desc.</p>
+                    <p className="text-[8px] font-semibold text-emerald-700 leading-none">🌙 Desc.</p>
                   </div>
                 )}
 
-                {/* Evento turno â€” hora inicio y fin en dos lÃ­neas */}
+                {/* Evento turno — hora inicio y fin en dos líneas */}
                 {hasTurno && (
                   <div
                     className="w-full rounded-[4px] px-1 py-1"
@@ -1134,7 +1134,7 @@ function CalendarioMes({ nombre, onNavegar }) {
         </div>
       )}
 
-      {/* Estado vacÃ­o */}
+      {/* Estado vacío */}
       {!cargandoMes && turnos.length === 0 && (
         <div className="px-3 py-2.5 border-t border-gray-100 flex items-center gap-2">
           <span className="text-[10px] text-gray-400 italic">Sin turnos programados este mes</span>
@@ -1144,7 +1144,7 @@ function CalendarioMes({ nombre, onNavegar }) {
   )
 }
 
-// â”€â”€ Navegador de semana â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Navegador de semana ───────────────────────────────────────────────────────
 function NavSemana({ offset, onChange }) {
   const { t } = useTranslation()
   const { lunes, domingo } = getLunes(offset)
@@ -1167,12 +1167,12 @@ function NavSemana({ offset, onChange }) {
   )
 }
 
-// â”€â”€ Navegador de dÃ­a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Navegador de día ─────────────────────────────────────────────────────────
 function NavDia({ fecha, onNavegar }) {
   const hoyStr = localDateISO()
   const d = new Date(fecha + 'T12:00:00')
   const esHoy = fecha === hoyStr
-  const label = `${['Domingo','Lunes','Martes','MiÃ©rcoles','Jueves','Viernes','SÃ¡bado'][d.getDay()]}, ${d.getDate()} de ${MESES_LARGO[d.getMonth()]} ${d.getFullYear()}`
+  const label = `${['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado'][d.getDay()]}, ${d.getDate()} de ${MESES_LARGO[d.getMonth()]} ${d.getFullYear()}`
   function mover(delta) {
     const nd = new Date(d); nd.setDate(d.getDate() + delta)
     onNavegar(toISO(nd))
@@ -1196,7 +1196,7 @@ function NavDia({ fecha, onNavegar }) {
   )
 }
 
-// â”€â”€ Vista timeline (Gantt) por dÃ­a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Vista timeline (Gantt) por día ────────────────────────────────────────────
 function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
   const [ahora, setAhora] = useState(() => { const n = new Date(); return n.getHours() + n.getMinutes() / 60 })
   const [soloActivos, setSoloActivos] = useState(false)
@@ -1278,7 +1278,7 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
     return `${Math.max(0, ((t - f) / span) * 100)}%`
   }
 
-  // LÃ­nea "ahora"
+  // Línea "ahora"
   const nowAdj = adjH(ahora)
   const nowPct = esHoyFlag && nowAdj >= rangeStart && nowAdj <= rangeEnd
     ? `${((nowAdj - rangeStart) / span) * 100}%`
@@ -1309,13 +1309,13 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
           <button
             onClick={() => setSoloActivos(v => !v)}
             className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border transition ${soloActivos ? 'bg-primary-600 text-white border-primary-600' : 'bg-white text-gray-500 border-gray-300 hover:border-primary-400 hover:text-primary-600'}`}>
-            {soloActivos ? 'âœ“ Solo en turno' : 'Solo en turno'}
+            {soloActivos ? '✓ Solo en turno' : 'Solo en turno'}
           </button>
         </div>
       )}
 
       <div style={{ minWidth: '500px' }}>
-        {/* Eje de horas â€” flex para que % use el mismo ancho que las barras */}
+        {/* Eje de horas — flex para que % use el mismo ancho que las barras */}
         <div className="flex items-end h-5 mb-1">
           <div className="w-28 shrink-0" />
           <div className="flex-1 relative overflow-visible">
@@ -1334,7 +1334,7 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
           </div>
         </div>
 
-        {/* Filas â€” grilla y barras en el mismo flex-1 para alineaciÃ³n perfecta */}
+        {/* Filas — grilla y barras en el mismo flex-1 para alineación perfecta */}
         <div className="space-y-1">
           {sorted.map(t => {
             const ini  = toHDec(t.turno_inicio)
@@ -1357,17 +1357,17 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
                     </span>
                   ) : (
                     <p className="text-[9px] text-gray-400 tabular-nums">
-                      {formatH(t.turno_inicio)}â€“{formatH(t.turno_fin)}
+                      {formatH(t.turno_inicio)}–{formatH(t.turno_fin)}
                     </p>
                   )}
                 </div>
                 <div className="flex-1 relative h-6">
-                  {/* Grilla vertical â€” mismo contenedor que las barras */}
+                  {/* Grilla vertical — mismo contenedor que las barras */}
                   {ticks.map(h => (
                     <div key={h} className="absolute top-0 h-full border-l border-gray-100 pointer-events-none"
                       style={{ left: `${((h - rangeStart) / span) * 100}%` }} />
                   ))}
-                  {/* LÃ­nea "ahora" */}
+                  {/* Línea "ahora" */}
                   {nowPct && (
                     <div className="absolute top-0 h-full w-px bg-red-400/70 pointer-events-none z-10"
                       style={{ left: nowPct }} />
@@ -1421,7 +1421,7 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
   )
 }
 
-// â”€â”€ Monitor de breaks del dÃ­a â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Monitor de breaks del día ─────────────────────────────────────────────────
 function BreaksMonitor() {
   function getNow() { const n = new Date(); return n.getHours() + n.getMinutes() / 60 }
   function getNowStr() { const n = new Date(); return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}` }
@@ -1456,7 +1456,7 @@ function BreaksMonitor() {
     return h + (m || 0) / 60
   }
   function fmtT(s) {
-    if (!s) return 'â€”'
+    if (!s) return '—'
     let time = String(s)
     if (time.includes('T')) time = time.split('T')[1]
     else if (time.includes(' ')) time = time.split(' ')[1]
@@ -1501,13 +1501,13 @@ function BreaksMonitor() {
     return (
       <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${bg}`}>
         <span className={`text-lg shrink-0 ${variante === 'tarde' ? 'opacity-40' : ''}`}>
-          {e.tipo === 'pausa' ? 'â˜•' : 'ðŸ½ï¸'}
+          {e.tipo === 'pausa' ? '☕' : '🍽️'}
         </span>
         <div className="flex-1 min-w-0">
           <p className={`text-sm font-medium truncate ${variante === 'tarde' ? 'text-gray-500' : 'text-gray-800'}`}>
             {e.agente?.split(' ').slice(0, 2).join(' ')}
           </p>
-          <p className="text-xs text-gray-400">{e.iniStr} â€“ {e.finStr}{e.linea ? ` Â· ${e.linea}` : ''}</p>
+          <p className="text-xs text-gray-400">{e.iniStr} – {e.finStr}{e.linea ? ` · ${e.linea}` : ''}</p>
         </div>
         <div className="text-right shrink-0">
           {variante === 'activo' && (
@@ -1537,14 +1537,14 @@ function BreaksMonitor() {
   }
 
   if (loading)
-    return <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Cargandoâ€¦</div>
+    return <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Cargando…</div>
 
   return (
     <div className="space-y-5 p-1">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-sm font-semibold text-gray-700">Breaks y almuerzos Â· hoy</p>
+          <p className="text-sm font-semibold text-gray-700">Breaks y almuerzos · hoy</p>
           <p className="text-xs text-gray-400">Hora actual: <span className="font-mono font-semibold text-gray-600">{nowStr}</span></p>
         </div>
         <button onClick={cargar}
@@ -1553,12 +1553,12 @@ function BreaksMonitor() {
         </button>
       </div>
 
-      {/* Filtro por lÃ­nea */}
+      {/* Filtro por línea */}
       {lineas.length > 1 && (
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => setFL('')}
             className={`px-3 py-1 rounded-full text-xs font-medium transition ${!filtroLinea ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            Todas las lÃ­neas
+            Todas las líneas
           </button>
           {lineas.map(l => (
             <button key={l} onClick={() => setFL(l === filtroLinea ? '' : l)}
@@ -1574,7 +1574,7 @@ function BreaksMonitor() {
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block"/>
-            Ahora Â· {enCurso.length} {enCurso.length === 1 ? 'persona' : 'personas'}
+            Ahora · {enCurso.length} {enCurso.length === 1 ? 'persona' : 'personas'}
           </p>
           <div className="space-y-1.5">
             {enCurso.map(e => <EventRow key={e.key} e={e} variante="activo" />)}
@@ -1582,11 +1582,11 @@ function BreaksMonitor() {
         </div>
       )}
 
-      {/* PrÃ³ximos 90 min */}
+      {/* Próximos 90 min */}
       {proximos.length > 0 && (
         <div>
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            PrÃ³ximos 90 min Â· {proximos.length}
+            Próximos 90 min · {proximos.length}
           </p>
           <div className="space-y-1.5">
             {proximos.map(e => <EventRow key={e.key} e={e} variante="proximo" />)}
@@ -1594,10 +1594,10 @@ function BreaksMonitor() {
         </div>
       )}
 
-      {/* MÃ¡s tarde */}
+      {/* Más tarde */}
       {masTarde.length > 0 && (
         <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">MÃ¡s tarde</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Más tarde</p>
           <div className="space-y-1">
             {masTarde.map(e => <EventRow key={e.key} e={e} variante="tarde" />)}
           </div>
@@ -1614,7 +1614,7 @@ function BreaksMonitor() {
   )
 }
 
-// â”€â”€ PÃ¡gina principal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ── Página principal ──────────────────────────────────────────────────────────
 export default function VipMisTurnos() {
   const { profile } = useAuth()
   const { t } = useTranslation()
@@ -1643,7 +1643,7 @@ export default function VipMisTurnos() {
   const [filtroLinea, setFL]      = useState('')
   const [vistaTimeline, setVT]    = useState(false)
 
-  // GestiÃ³n directa (admin/supervisor)
+  // Gestión directa (admin/supervisor)
   const [modoGestion, setModoGestion] = useState('individual') // 'individual' | 'semanal'
   const [gestionSel1, setGS1]         = useState(null)
   const [gestionModal, setGModal]     = useState(null)
@@ -1661,7 +1661,7 @@ export default function VipMisTurnos() {
   const [showHistorial, setShowHist]      = useState(false)
   const [reenviando, setReenviando]       = useState(null)
   const [reenvioMsg, setReenvioMsg]       = useState(null)
-  // Rango de fechas (reemplaza el filtro de dÃ­a Ãºnico)
+  // Rango de fechas (reemplaza el filtro de día único)
   const [filtroDesde, setFD]   = useState('')
   const [filtroHasta, setFH]   = useState('')
 
@@ -1683,7 +1683,7 @@ export default function VipMisTurnos() {
     })
   }, [])
 
-  // Auto-detecta el nombre del analista en el Sheet si aÃºn no estÃ¡ configurado
+  // Auto-detecta el nombre del analista en el Sheet si aún no está configurado
   useEffect(() => {
     if (!profile?.id || profile?.nombre_turno || nombreTurno.trim()) return
     autoDetectarNombreTurno(profile.full_name).then(async nombre => {
@@ -1696,7 +1696,7 @@ export default function VipMisTurnos() {
 
   const nombreEfectivo = nombreTurno.trim() || profile?.nombre_turno || profile?.full_name || ''
 
-  // Vista semana / dÃ­a
+  // Vista semana / día
   const [vistaMode, setVistaMode] = useState('semana')
   const [diaActivo, setDiaActivo] = useState(localDateISO())
 
@@ -1755,8 +1755,8 @@ export default function VipMisTurnos() {
   const mallaPorFecha = mallafiltrada.reduce((a, turno) => { if (!a[turno.fecha]) a[turno.fecha] = []; a[turno.fecha].push(turno); return a }, {})
 
   // Fechas visibles en la malla:
-  // - Con rango: todos los dÃ­as del rango
-  // - Sin rango: dÃ­as de la semana desde HOY en adelante (ocultar pasados)
+  // - Con rango: todos los días del rango
+  // - Sin rango: días de la semana desde HOY en adelante (ocultar pasados)
   const diasVisibles = (() => {
     if (tieneRango) {
       const inicio = filtroDesde || toISO(lunes)
@@ -1784,7 +1784,7 @@ export default function VipMisTurnos() {
     return a
   }, {})
 
-  // Modo semanal: lista de analistas y pares por dÃ­a
+  // Modo semanal: lista de analistas y pares por día
   const todosLosAnalistas = [...new Set(turnosSemana.map(t => t.agente).filter(Boolean))].sort()
   const paresSemana = diasSemana.map(fecha => {
     const turnoA = turnosSemana.find(t => t.fecha === fecha && t.agente?.toLowerCase() === semAnalA.toLowerCase())
@@ -1838,7 +1838,7 @@ export default function VipMisTurnos() {
     if (!pares.length) return
     setSemGuard(true)
     try {
-      // Supabase en paralelo para todos los dÃ­as
+      // Supabase en paralelo para todos los días
       await Promise.all(
         pares.map(p => intercambiarTurnosDirecto(p.turnoA, p.turnoB, profile.full_name, semMotivo.trim() || null))
       )
@@ -1868,7 +1868,7 @@ export default function VipMisTurnos() {
 
   async function reenviarAlSheet(cambio) {
     if (!scriptUrl.trim() || !scriptSecret.trim()) {
-      alert('Configura la URL Web App y la clave secreta en âš™ï¸ ConfiguraciÃ³n primero.')
+      alert('Configura la URL Web App y la clave secreta en ⚙️ Configuración primero.')
       return
     }
     setReenviando(cambio.id)
@@ -1877,7 +1877,7 @@ export default function VipMisTurnos() {
       await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), cambio)
       setHistorial(prev => prev.filter(c => c.id !== cambio.id))
     } catch (e) {
-      const msg = e?.message || (typeof e === 'string' ? e : null) || 'El script no respondiÃ³ correctamente. Verifica que la URL Web App sea vÃ¡lida y estÃ© publicada.'
+      const msg = e?.message || (typeof e === 'string' ? e : null) || 'El script no respondió correctamente. Verifica que la URL Web App sea válida y esté publicada.'
       setReenvioMsg({ id: cambio.id, ok: false, text: msg })
     }
     setReenviando(null)
@@ -1894,9 +1894,9 @@ export default function VipMisTurnos() {
           try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), resultado.cambio) } catch {}
         }
       } else if (resultado.motivo?.includes('descanso')) {
-        // Advertencia de 12h â€” preguntar si quiere continuar de todos modos
+        // Advertencia de 12h — preguntar si quiere continuar de todos modos
         const continuar = window.confirm(
-          `âš ï¸ Advertencia: ${resultado.motivo}\n\nÂ¿Aplicar el cambio de turno de todos modos?`
+          `⚠️ Advertencia: ${resultado.motivo}\n\n¿Aplicar el cambio de turno de todos modos?`
         )
         if (continuar) {
           const forzado = await forzarAplicarCambioAceptado(id)
@@ -1956,7 +1956,7 @@ export default function VipMisTurnos() {
     setImportMsg(null)
     try {
       const n = await importarTurnosDesdeSheet(url)
-      setImportMsg({ ok: true, text: `âœ“ ${n} turnos sincronizados desde el Sheet.` })
+      setImportMsg({ ok: true, text: `✓ ${n} turnos sincronizados desde el Sheet.` })
       await cargar()
     } catch (e) {
       setImportMsg({ ok: false, text: e.message })
@@ -1969,7 +1969,7 @@ export default function VipMisTurnos() {
     ['malla', t('turnos.malla')],
     ['solicitudes', recibidas.length > 0 ? `${t('turnos.solicitudes')} (${recibidas.length})` : t('turnos.solicitudes')],
     ...(esAdmin ? [['aprobar', (() => { const n = pendientes.filter(s=>s.estado==='aceptado').length; return n > 0 ? `${t('turnos.aprobar')} (${n})` : t('turnos.aprobar') })()] ] : []),
-    ...(esAdmin ? [['gestion', 'GestiÃ³n directa']] : []),
+    ...(esAdmin ? [['gestion', 'Gestión directa']] : []),
     ...(esAdmin ? [['breaks', 'Monitor Breaks']] : []),
   ]
 
@@ -1983,7 +1983,7 @@ export default function VipMisTurnos() {
             <Calendar className="w-5 h-5 text-primary-600"/> {t('turnos.title')}
           </h1>
           <p className="text-xs text-gray-400 mt-0.5 flex items-center gap-1">
-            <User className="w-3 h-3"/> {nombreEfectivo || 'â€”'}
+            <User className="w-3 h-3"/> {nombreEfectivo || '—'}
             {!nombreTurno.trim() && !profile?.nombre_turno && (
               <button onClick={() => setShowConfig(true)} className="underline hover:text-gray-600 ml-1">{t('turnos.nombreIncorrecto')}</button>
             )}
@@ -1995,7 +1995,7 @@ export default function VipMisTurnos() {
               title="Sincronizar turnos desde Google Sheet"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg disabled:opacity-50 transition">
               <Download className={`w-3.5 h-3.5 ${importando ? 'animate-bounce' : ''}`}/>
-              {importando ? 'Sincronizandoâ€¦' : 'Sincronizar Sheet'}
+              {importando ? 'Sincronizando…' : 'Sincronizar Sheet'}
             </button>
           )}
           <button onClick={cargar} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100">
@@ -2007,7 +2007,7 @@ export default function VipMisTurnos() {
         </div>
       </div>
 
-      {/* Mensaje resultado importaciÃ³n */}
+      {/* Mensaje resultado importación */}
       {importMsg && (
         <div className={`flex items-center justify-between rounded-xl px-4 py-2.5 text-sm ${importMsg.ok ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-red-50 border border-red-200 text-red-800'}`}>
           <span>{importMsg.text}</span>
@@ -2033,9 +2033,9 @@ export default function VipMisTurnos() {
               <div>
                 <label className="text-xs font-medium text-gray-700 block mb-1">URL del Google Sheet <span className="text-gray-400">(debe estar publicado como CSV)</span></label>
                 <input value={sheetImportUrl} onChange={e => setSheetImportUrl(e.target.value)}
-                  placeholder="https://docs.google.com/spreadsheets/d/â€¦"
+                  placeholder="https://docs.google.com/spreadsheets/d/…"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"/>
-                <p className="text-xs text-gray-400 mt-1">Archivo â†’ Compartir â†’ Publicar en la web â†’ CSV</p>
+                <p className="text-xs text-gray-400 mt-1">Archivo → Compartir → Publicar en la web → CSV</p>
               </div>
               <hr className="border-blue-200"/>
               <p className="text-xs font-semibold text-blue-700">{t('turnos.appsScript')} <span className="font-normal text-blue-500">(para aplicar cambios al Sheet)</span></p>
@@ -2089,7 +2089,7 @@ export default function VipMisTurnos() {
         <div className="text-center py-12 text-gray-400 text-sm">{t('turnos.cargando')}</div>
       ) : (
         <>
-          {/* â”€â”€ MIS TURNOS â”€â”€ */}
+          {/* ── MIS TURNOS ── */}
           {tab === 'mis-turnos' && (
             <div className="space-y-4">
               <div className="flex flex-col lg:flex-row gap-4 items-start">
@@ -2101,7 +2101,7 @@ export default function VipMisTurnos() {
                 {/* Calendario semanal / diario */}
                 <div className="flex-1 min-w-0 space-y-3">
                   <div className="flex items-center gap-2">
-                    {/* Toggle Semana / DÃ­a */}
+                    {/* Toggle Semana / Día */}
                     <div className="flex rounded-lg border border-gray-200 overflow-hidden shrink-0">
                       <button
                         onClick={() => setVistaMode('semana')}
@@ -2111,7 +2111,7 @@ export default function VipMisTurnos() {
                       <button
                         onClick={() => setVistaMode('dia')}
                         className={`px-3 py-1.5 text-xs font-medium transition border-l border-gray-200 ${vistaMode === 'dia' ? 'bg-gray-800 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}>
-                        DÃ­a
+                        Día
                       </button>
                     </div>
                     {/* Navegador */}
@@ -2128,7 +2128,7 @@ export default function VipMisTurnos() {
                   </div>
                   {turnosSemana.length === 0 && (
                     <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-                      No hay turnos programados esta semana en el sistema. Sincroniza el Sheet o usa GestiÃ³n directa para agregar turnos.
+                      No hay turnos programados esta semana en el sistema. Sincroniza el Sheet o usa Gestión directa para agregar turnos.
                     </div>
                   )}
                   <CalendarioSemana
@@ -2165,7 +2165,7 @@ export default function VipMisTurnos() {
                             <span className="text-xs font-bold text-orange-800">{he.horas_extra}h extra</span>
                             {he.aprobado_por && (
                               <span className="text-[10px] text-orange-600 bg-orange-100 border border-orange-200 px-1.5 py-0.5 rounded-full">
-                                âœ“ {he.aprobado_por}
+                                ✓ {he.aprobado_por}
                               </span>
                             )}
                           </div>
@@ -2179,10 +2179,10 @@ export default function VipMisTurnos() {
             </div>
           )}
 
-          {/* â”€â”€ MALLA COMPLETA â”€â”€ */}
+          {/* ── MALLA COMPLETA ── */}
           {tab === 'malla' && (
             <div className="space-y-4">
-              {/* Navegador de semana â€” solo cuando no hay rango activo */}
+              {/* Navegador de semana — solo cuando no hay rango activo */}
               {!tieneRango && <NavSemana offset={offset} onChange={setOffset}/>}
 
               {/* Filtros */}
@@ -2211,7 +2211,7 @@ export default function VipMisTurnos() {
                         className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"/>
                     </div>
                   </div>
-                  {/* LÃ­nea */}
+                  {/* Línea */}
                   <div>
                     <label className="text-xs text-gray-500 block mb-1">{t('turnos.linea')}</label>
                     <select value={filtroLinea} onChange={e => setFL(e.target.value)}
@@ -2266,7 +2266,7 @@ export default function VipMisTurnos() {
                 )}
               </div>
 
-              {/* DÃ­as */}
+              {/* Días */}
               {diasVisibles.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <Calendar className="w-8 h-8 mx-auto mb-2 opacity-40"/>
@@ -2290,7 +2290,7 @@ export default function VipMisTurnos() {
                           <p className="text-xs text-gray-400">{turnos.length} {turnos.length !== 1 ? t('turnos.turnos') : t('turnos.turno')}</p>
                           {esAdmin && (
                             <button onClick={() => setTE({ fecha, agente: '', turno_inicio: null })}
-                              title="Agregar turno en este dÃ­a"
+                              title="Agregar turno en este día"
                               className="text-xs text-primary-600 hover:bg-primary-100 px-1.5 py-0.5 rounded-lg transition font-medium">
                               + Agregar
                             </button>
@@ -2327,7 +2327,7 @@ export default function VipMisTurnos() {
                                   <div className="flex items-center gap-2 shrink-0">
                                     {esDescanso(turno)
                                       ? <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Descanso</span>
-                                      : <span className={`text-xs tabular-nums ${esMio ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>{formatH(turno.turno_inicio)} â€“ {formatH(turno.turno_fin)}</span>
+                                      : <span className={`text-xs tabular-nums ${esMio ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>{formatH(turno.turno_inicio)} – {formatH(turno.turno_fin)}</span>
                                     }
                                     {!esMio && futuro && (
                                       bloq
@@ -2363,7 +2363,7 @@ export default function VipMisTurnos() {
             </div>
           )}
 
-          {/* â”€â”€ SOLICITUDES â”€â”€ */}
+          {/* ── SOLICITUDES ── */}
           {tab === 'solicitudes' && (
             <div className="space-y-6">
               <div>
@@ -2384,12 +2384,12 @@ export default function VipMisTurnos() {
                             <div className="bg-orange-50 rounded-lg p-2">
                               <p className="font-semibold text-orange-700 mb-0.5">{t('turnos.tuTurnoCederias')}</p>
                               <p className="font-medium">{formatFecha(s.turno_rec_fecha)}</p>
-                              <p className="text-gray-500">{formatH(s.turno_rec_inicio)} â€“ {formatH(s.turno_rec_fin)}</p>
+                              <p className="text-gray-500">{formatH(s.turno_rec_inicio)} – {formatH(s.turno_rec_fin)}</p>
                             </div>
                             <div className="bg-blue-50 rounded-lg p-2">
                               <p className="font-semibold text-blue-700 mb-0.5">{t('turnos.turnoRecibirias')}</p>
                               <p className="font-medium">{formatFecha(s.turno_sol_fecha)}</p>
-                              <p className="text-gray-500">{formatH(s.turno_sol_inicio)} â€“ {formatH(s.turno_sol_fin)}</p>
+                              <p className="text-gray-500">{formatH(s.turno_sol_inicio)} – {formatH(s.turno_sol_fin)}</p>
                             </div>
                           </div>
                           {s.motivo && <p className="text-xs text-gray-500 italic">"{s.motivo}"</p>}
@@ -2422,11 +2422,11 @@ export default function VipMisTurnos() {
                           <div className="grid grid-cols-2 gap-3 text-xs">
                             <div className="bg-orange-50 rounded-lg p-2">
                               <p className="font-semibold text-orange-700 mb-0.5">{t('turnos.cederias')}</p>
-                              <p>{formatFecha(s.turno_sol_fecha)} Â· {formatH(s.turno_sol_inicio)}â€“{formatH(s.turno_sol_fin)}</p>
+                              <p>{formatFecha(s.turno_sol_fecha)} · {formatH(s.turno_sol_inicio)}–{formatH(s.turno_sol_fin)}</p>
                             </div>
                             <div className="bg-blue-50 rounded-lg p-2">
                               <p className="font-semibold text-blue-700 mb-0.5">{t('turnos.recibirias')}</p>
-                              <p>{formatFecha(s.turno_rec_fecha)} Â· {formatH(s.turno_rec_inicio)}â€“{formatH(s.turno_rec_fin)}</p>
+                              <p>{formatFecha(s.turno_rec_fecha)} · {formatH(s.turno_rec_inicio)}–{formatH(s.turno_rec_fin)}</p>
                             </div>
                           </div>
                           {s.motivo_rechazo && <p className="text-xs text-red-600 italic">{t('turnos.rechazo')}: "{s.motivo_rechazo}"</p>}
@@ -2445,7 +2445,7 @@ export default function VipMisTurnos() {
             </div>
           )}
 
-          {/* â”€â”€ APROBAR â”€â”€ */}
+          {/* ── APROBAR ── */}
           {tab === 'aprobar' && esAdmin && (() => {
             const paraAprobar = pendientes.filter(s => s.estado === 'aceptado')
             const enCurso     = pendientes.filter(s => s.estado === 'pendiente')
@@ -2453,7 +2453,7 @@ export default function VipMisTurnos() {
               <div key={s.id} className={`bg-white border rounded-xl p-4 space-y-3 ${accionable ? 'border-gray-200' : 'border-dashed border-gray-200 opacity-80'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm font-semibold text-gray-900">{s.solicitante_nombre} â†” {s.receptor_nombre}</p>
+                    <p className="text-sm font-semibold text-gray-900">{s.solicitante_nombre} ↔ {s.receptor_nombre}</p>
                     <p className="text-xs text-gray-400">{t('turnos.solicitadoEl')} {new Date(s.created_at).toLocaleDateString('es-CO',{day:'2-digit',month:'short',year:'2-digit'})}</p>
                   </div>
                   <span className={`text-xs font-medium px-2 py-0.5 rounded-full shrink-0 ${accionable ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
@@ -2463,12 +2463,12 @@ export default function VipMisTurnos() {
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <div className="bg-gray-50 rounded-lg p-2">
                     <p className="font-semibold text-gray-700 mb-1">{s.solicitante_nombre}</p>
-                    <p className="text-gray-500">{t('turnos.cede')}: {formatFecha(s.turno_sol_fecha)} {formatH(s.turno_sol_inicio)}â€“{formatH(s.turno_sol_fin)}</p>
+                    <p className="text-gray-500">{t('turnos.cede')}: {formatFecha(s.turno_sol_fecha)} {formatH(s.turno_sol_inicio)}–{formatH(s.turno_sol_fin)}</p>
                     <p className="text-gray-500">{t('turnos.recibe')}: {formatFecha(s.turno_rec_fecha)}</p>
                   </div>
                   <div className="bg-gray-50 rounded-lg p-2">
                     <p className="font-semibold text-gray-700 mb-1">{s.receptor_nombre}</p>
-                    <p className="text-gray-500">{t('turnos.cede')}: {formatFecha(s.turno_rec_fecha)} {formatH(s.turno_rec_inicio)}â€“{formatH(s.turno_rec_fin)}</p>
+                    <p className="text-gray-500">{t('turnos.cede')}: {formatFecha(s.turno_rec_fecha)} {formatH(s.turno_rec_inicio)}–{formatH(s.turno_rec_fin)}</p>
                     <p className="text-gray-500">{t('turnos.recibe')}: {formatFecha(s.turno_sol_fecha)}</p>
                   </div>
                 </div>
@@ -2511,7 +2511,7 @@ export default function VipMisTurnos() {
             )
           })()}
 
-          {/* â”€â”€ GESTIÃ“N DIRECTA (solo admin/supervisor) â”€â”€ */}
+          {/* ── GESTIÓN DIRECTA (solo admin/supervisor) ── */}
           {tab === 'gestion' && esAdmin && (
             <div className="space-y-4">
               <NavSemana offset={offset} onChange={setOffset}/>
@@ -2526,21 +2526,21 @@ export default function VipMisTurnos() {
                 ))}
               </div>
 
-              {/* â”€â”€ Reenviar cambios al Sheet â”€â”€ */}
+              {/* ── Reenviar cambios al Sheet ── */}
               <div className="flex items-center justify-between">
                 <button onClick={cargarHistorial}
                   className="text-xs text-primary-600 hover:text-primary-800 underline flex items-center gap-1">
-                  <RefreshCw className="w-3 h-3"/> Ver cambios recientes Â· reenviar al Sheet
+                  <RefreshCw className="w-3 h-3"/> Ver cambios recientes · reenviar al Sheet
                 </button>
               </div>
               {showHistorial && (
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                   <div className="flex items-center justify-between px-4 py-2.5 bg-gray-50 border-b">
-                    <p className="text-xs font-semibold text-gray-600">Cambios aprobados (Ãºltimos 7 dÃ­as)</p>
+                    <p className="text-xs font-semibold text-gray-600">Cambios aprobados (últimos 7 días)</p>
                     <button onClick={() => setShowHist(false)} className="text-gray-400 hover:text-gray-600"><X className="w-4 h-4"/></button>
                   </div>
                   {historial.length === 0 ? (
-                    <p className="text-xs text-gray-400 px-4 py-3">Sin cambios registrados en los Ãºltimos 7 dÃ­as.</p>
+                    <p className="text-xs text-gray-400 px-4 py-3">Sin cambios registrados en los últimos 7 días.</p>
                   ) : (
                     <div className="divide-y divide-gray-50">
                       {historial.map(c => {
@@ -2556,12 +2556,12 @@ export default function VipMisTurnos() {
                             </div>
                             {msg ? (
                               <span className={`text-xs font-medium ${msg.ok ? 'text-green-600' : 'text-red-500'}`}>
-                                {msg.ok ? 'âœ“ Enviado al Sheet' : `âœ— ${reenvioMsg.text}`}
+                                {msg.ok ? '✓ Enviado al Sheet' : `✗ ${reenvioMsg.text}`}
                               </span>
                             ) : (
                               <button onClick={() => reenviarAlSheet(c)} disabled={!!reenviando}
                                 className="shrink-0 text-xs px-3 py-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50">
-                                {reenviando === c.id ? 'Enviandoâ€¦' : 'Reenviar al Sheet'}
+                                {reenviando === c.id ? 'Enviando…' : 'Reenviar al Sheet'}
                               </button>
                             )}
                           </div>
@@ -2572,10 +2572,10 @@ export default function VipMisTurnos() {
                 </div>
               )}
 
-              {/* â”€â”€ MODO SEMANAL â”€â”€ */}
+              {/* ── MODO SEMANAL ── */}
               {modoGestion === 'semanal' && (
                 <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-4">
-                  <p className="text-xs text-gray-500">Selecciona los dos analistas. Se mostrarÃ¡n sus turnos de la semana. Desmarca los dÃ­as que quieras excluir del intercambio.</p>
+                  <p className="text-xs text-gray-500">Selecciona los dos analistas. Se mostrarán sus turnos de la semana. Desmarca los días que quieras excluir del intercambio.</p>
 
                   {/* Selectores de analistas */}
                   <div className="grid grid-cols-2 gap-3">
@@ -2587,7 +2587,7 @@ export default function VipMisTurnos() {
                         <label className="text-xs font-medium text-gray-700 block mb-1">{label}</label>
                         <select value={val} onChange={e => set(e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
-                          <option value="">â€” Seleccionar â€”</option>
+                          <option value="">— Seleccionar —</option>
                           {todosLosAnalistas.filter(a => a !== (label === 'Analista A' ? semAnalB : semAnalA)).map(a => (
                             <option key={a} value={a}>{a}</option>
                           ))}
@@ -2596,10 +2596,10 @@ export default function VipMisTurnos() {
                     ))}
                   </div>
 
-                  {/* Tabla de dÃ­as */}
+                  {/* Tabla de días */}
                   {semAnalA && semAnalB && (
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">DÃ­as de la semana</p>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Días de la semana</p>
                       <div className="rounded-xl border border-gray-200 overflow-hidden">
                         <table className="w-full text-sm">
                           <thead className="bg-gray-50 border-b">
@@ -2609,7 +2609,7 @@ export default function VipMisTurnos() {
                                   onChange={() => setDiasExc(new Set())}
                                   title="Seleccionar todos" className="rounded"/>
                               </th>
-                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">DÃ­a</th>
+                              <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">Día</th>
                               <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">{semAnalA}</th>
                               <th className="px-3 py-2 text-left text-xs font-semibold text-gray-500">{semAnalB}</th>
                             </tr>
@@ -2632,10 +2632,10 @@ export default function VipMisTurnos() {
                                     {!ambos && <span className="ml-2 text-xs text-gray-400">(falta un turno)</span>}
                                   </td>
                                   <td className="px-3 py-2 text-xs text-gray-600">
-                                    {turnoA ? `${formatH(turnoA.turno_inicio)}â€“${formatH(turnoA.turno_fin)}` : 'â€”'}
+                                    {turnoA ? `${formatH(turnoA.turno_inicio)}–${formatH(turnoA.turno_fin)}` : '—'}
                                   </td>
                                   <td className="px-3 py-2 text-xs text-gray-600">
-                                    {turnoB ? `${formatH(turnoB.turno_inicio)}â€“${formatH(turnoB.turno_fin)}` : 'â€”'}
+                                    {turnoB ? `${formatH(turnoB.turno_inicio)}–${formatH(turnoB.turno_fin)}` : '—'}
                                   </td>
                                 </tr>
                               )
@@ -2644,26 +2644,26 @@ export default function VipMisTurnos() {
                         </table>
                       </div>
 
-                      {/* Motivo y botÃ³n */}
+                      {/* Motivo y botón */}
                       <input value={semMotivo} onChange={e => setSemMotivo(e.target.value)}
-                        placeholder="Motivo del intercambio (opcional)â€¦"
+                        placeholder="Motivo del intercambio (opcional)…"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"/>
                       <button onClick={handleIntercambioSemanal}
                         disabled={semGuardando || paresSemana.filter(p => p.turnoA && p.turnoB && !diasExcluidos.has(p.fecha)).length === 0}
                         className="w-full py-2.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
                         <ArrowLeftRight className="w-4 h-4"/>
-                        {semGuardando ? 'Aplicandoâ€¦' : `Intercambiar ${paresSemana.filter(p => p.turnoA && p.turnoB && !diasExcluidos.has(p.fecha)).length} dÃ­a(s)`}
+                        {semGuardando ? 'Aplicando…' : `Intercambiar ${paresSemana.filter(p => p.turnoA && p.turnoB && !diasExcluidos.has(p.fecha)).length} día(s)`}
                       </button>
                     </div>
                   )}
                 </div>
               )}
 
-              {/* â”€â”€ MODO INDIVIDUAL (existente) â”€â”€ */}
+              {/* ── MODO INDIVIDUAL (existente) ── */}
               {modoGestion === 'individual' && (<>
-              {/* InstrucciÃ³n */}
+              {/* Instrucción */}
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
-                <strong>Modo gestiÃ³n directa:</strong> selecciona dos turnos para intercambiarlos sin pasar por el flujo de solicitudes. El cambio queda registrado como aprobado por ti.
+                <strong>Modo gestión directa:</strong> selecciona dos turnos para intercambiarlos sin pasar por el flujo de solicitudes. El cambio queda registrado como aprobado por ti.
               </div>
 
               {/* Filtros */}
@@ -2671,12 +2671,12 @@ export default function VipMisTurnos() {
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400"/>
                   <input value={gestionFA} onChange={e => setGFA(e.target.value)}
-                    placeholder="Buscar analistaâ€¦"
+                    placeholder="Buscar analista…"
                     className="pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 w-48"/>
                 </div>
                 <select value={gestionFL} onChange={e => setGFL(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white">
-                  <option value="">Todas las lÃ­neas</option>
+                  <option value="">Todas las líneas</option>
                   {lineas.map(l => <option key={l} value={l}>{l}</option>)}
                 </select>
               </div>
@@ -2686,8 +2686,8 @@ export default function VipMisTurnos() {
                 <div className="flex items-center justify-between bg-blue-50 border border-blue-300 rounded-xl px-4 py-3">
                   <div className="flex items-center gap-2 text-sm text-blue-800">
                     <ArrowLeftRight className="w-4 h-4 shrink-0"/>
-                    <span><strong>{gestionSel1.agente}</strong> Â· {formatFecha(gestionSel1.fecha)} Â· {formatH(gestionSel1.turno_inicio)}â€“{formatH(gestionSel1.turno_fin)}</span>
-                    <span className="text-blue-500 text-xs">â†’ haz clic en el turno a intercambiar</span>
+                    <span><strong>{gestionSel1.agente}</strong> · {formatFecha(gestionSel1.fecha)} · {formatH(gestionSel1.turno_inicio)}–{formatH(gestionSel1.turno_fin)}</span>
+                    <span className="text-blue-500 text-xs">→ haz clic en el turno a intercambiar</span>
                   </div>
                   <button onClick={() => setGS1(null)} className="text-blue-400 hover:text-blue-600 p-1">
                     <X className="w-4 h-4"/>
@@ -2695,7 +2695,7 @@ export default function VipMisTurnos() {
                 </div>
               )}
 
-              {/* Turnos agrupados por dÃ­a */}
+              {/* Turnos agrupados por día */}
               {diasSemana.map(fecha => {
                 const turnos = gestionPorFecha[fecha] ?? []
                 if (!turnos.length) return null
@@ -2722,9 +2722,9 @@ export default function VipMisTurnos() {
                             }`}
                           >
                             <p className="font-semibold text-sm text-gray-900 truncate">{turno.agente}</p>
-                            <p className="text-xs text-gray-500 mt-0.5">{formatH(turno.turno_inicio)}â€“{formatH(turno.turno_fin)}</p>
+                            <p className="text-xs text-gray-500 mt-0.5">{formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}</p>
                             {turno.linea_atencion && <p className="text-xs text-gray-400 mt-0.5">{turno.linea_atencion}</p>}
-                            {isSel && <p className="text-xs text-blue-600 font-medium mt-1">âœ“ Seleccionado</p>}
+                            {isSel && <p className="text-xs text-blue-600 font-medium mt-1">✓ Seleccionado</p>}
                           </button>
                         )
                       })}
@@ -2742,7 +2742,7 @@ export default function VipMisTurnos() {
               </>)}
             </div>
           )}
-          {/* â”€â”€ MONITOR BREAKS (solo admin/supervisor) â”€â”€ */}
+          {/* ── MONITOR BREAKS (solo admin/supervisor) ── */}
           {tab === 'breaks' && esAdmin && (
             <div className="max-w-xl">
               <BreaksMonitor />
@@ -2796,7 +2796,7 @@ export default function VipMisTurnos() {
         />
       )}
 
-      {/* Modal confirmaciÃ³n intercambio directo */}
+      {/* Modal confirmación intercambio directo */}
       {gestionModal && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
@@ -2812,20 +2812,20 @@ export default function VipMisTurnos() {
                 <div key={i} className={`rounded-xl border p-3 text-xs space-y-0.5 ${i === 0 ? 'border-blue-200 bg-blue-50' : 'border-purple-200 bg-purple-50'}`}>
                   <p className={`font-bold text-sm ${i === 0 ? 'text-blue-800' : 'text-purple-800'}`}>{turno.agente}</p>
                   <p className="text-gray-600">{formatFecha(turno.fecha)}</p>
-                  <p className="text-gray-600">{formatH(turno.turno_inicio)}â€“{formatH(turno.turno_fin)}</p>
+                  <p className="text-gray-600">{formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}</p>
                   {turno.linea_atencion && <p className="text-gray-400">{turno.linea_atencion}</p>}
                 </div>
               ))}
             </div>
 
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-              <ArrowLeftRight className="w-3.5 h-3.5"/> Los agentes quedarÃ¡n intercambiados en esas fechas
+              <ArrowLeftRight className="w-3.5 h-3.5"/> Los agentes quedarán intercambiados en esas fechas
             </div>
 
             <div>
               <label className="text-xs font-medium text-gray-700 block mb-1">Motivo <span className="text-gray-400">(opcional)</span></label>
               <textarea value={gestionMotivo} onChange={e => setGMotivo(e.target.value)} rows={2}
-                placeholder="Ej: cubrimiento por incapacidad, ajuste de programaciÃ³nâ€¦"
+                placeholder="Ej: cubrimiento por incapacidad, ajuste de programación…"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"/>
             </div>
 
@@ -2837,7 +2837,7 @@ export default function VipMisTurnos() {
               <button onClick={handleIntercambioDirecto} disabled={gestionGuardando}
                 className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
                 <ArrowLeftRight className="w-4 h-4"/>
-                {gestionGuardando ? 'Aplicandoâ€¦' : 'Confirmar intercambio'}
+                {gestionGuardando ? 'Aplicando…' : 'Confirmar intercambio'}
               </button>
             </div>
           </div>
@@ -2878,4 +2878,3 @@ export default function VipMisTurnos() {
     </div>
   )
 }
-
