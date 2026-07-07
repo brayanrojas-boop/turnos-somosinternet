@@ -109,15 +109,29 @@ function ModalidadBadge({ email }) {
 // ── Validación básica ─────────────────────────────────────────────────────────
 function esDescanso(turno) { return !turno?.turno_inicio }
 
+function turnoInicioMs(turno) {
+  if (turno.turno_inicio) return new Date(`${turno.fecha}T${turno.turno_inicio}`).getTime()
+  return new Date(turno.fecha + 'T00:00:00').getTime()
+}
+function turnoEnCurso(turno) {
+  const ahora = Date.now()
+  if (!turno.turno_inicio) return false
+  const ini = new Date(`${turno.fecha}T${turno.turno_inicio}`).getTime()
+  const fin = turno.turno_fin ? new Date(`${turno.fecha}T${turno.turno_fin}`).getTime() : Infinity
+  return ahora >= ini && ahora <= fin
+}
+
 function validar8h(tSol, tRec, t) {
   const err = []
   const ahora = Date.now()
-  const dSol = new Date(tSol.fecha + 'T12:00:00').getTime()
-  const dRec = new Date(tRec.fecha + 'T12:00:00').getTime()
+  const dSol = turnoInicioMs(tSol)
+  const dRec = turnoInicioMs(tRec)
   if (tSol.linea_atencion && tRec.linea_atencion && tSol.linea_atencion !== tRec.linea_atencion)
     err.push(t('turnos.errMismaLinea', { linea: tSol.linea_atencion }))
-  if (dSol <= ahora) err.push(t('turnos.errTurnoPasado'))
-  if (dRec <= ahora) err.push(t('turnos.errTurnoOtroPasado'))
+  if (turnoEnCurso(tSol)) err.push('Tu turno ya está en curso, no es posible solicitar un cambio.')
+  else if (dSol <= ahora) err.push(t('turnos.errTurnoPasado'))
+  if (turnoEnCurso(tRec)) err.push('El turno del otro analista ya está en curso.')
+  else if (dRec <= ahora) err.push(t('turnos.errTurnoOtroPasado'))
   // Si alguno es día de descanso, no aplica la restricción de 8h de anticipación
   if (!esDescanso(tSol) && !esDescanso(tRec)) {
     const i1 = new Date(`${tSol.fecha}T${tSol.turno_inicio}`).getTime()
@@ -161,7 +175,8 @@ function SolicitarModal({ miTurno, turnosPropios, todosLosTurnos, solicitudesAct
 
   const disponibles = todosLosTurnos.filter(t => {
     if (t.agente?.toLowerCase() === mombre) return false
-    // Excluir solo si tiene turno_inicio Y ya pasó
+    if (t.fecha !== miTurno.fecha) return false  // solo mismo día que el turno a ceder
+    // Excluir si ya inició o está en curso
     if (t.turno_inicio && new Date(`${t.fecha}T${t.turno_inicio}`) <= Date.now()) return false
     // Excluir si no tiene turno_inicio Y la fecha ya pasó (descansos en fechas pasadas)
     if (!t.turno_inicio && new Date(t.fecha + 'T23:59:59') <= Date.now()) return false
@@ -282,6 +297,8 @@ function SolicitarDesdeMallaModal({ turnoObjetivo, solicitudesActivas, nombreEfe
   useEffect(() => {
     getMisTurnos(nombreEfectivo).then(d => {
       const futuros = d.filter(turno =>
+        turno.fecha === turnoObjetivo.fecha &&  // solo el mismo día
+        !turnoEnCurso(turno) &&                 // excluir si ya está en curso
         !(turnoObjetivo.linea_atencion && turno.linea_atencion && turno.linea_atencion !== turnoObjetivo.linea_atencion)
       )
       setMisFuturos(futuros)
