@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getTurnosSemana, getWFMInteracciones, upsertWFMInteracciones, getAnalistasLinea, saveTurnosProgramadosBulk } from '../lib/vip'
-import { ChevronLeft, ChevronRight, Users, TrendingUp, AlertTriangle, Settings2, Upload, X, CheckCircle, CalendarPlus } from 'lucide-react'
+import { getTurnosSemana, getWFMInteracciones, upsertWFMInteracciones, getAnalistasLinea, saveTurnosProgramadosBulk, getUltimoTrasnocho } from '../lib/vip'
+import { ChevronLeft, ChevronRight, Users, TrendingUp, AlertTriangle, Settings2, Upload, X, CheckCircle, CalendarPlus, Moon } from 'lucide-react'
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
 function getLunes(offset = 0) {
@@ -220,9 +220,9 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
   const startOfYear = new Date(lunes.getFullYear(), 0, 1)
   const weekOfYear  = Math.floor((lunes - startOfYear) / (7 * 86400000))
 
-  // Separar analista de trasnocho — rota cada semana según weekOfYear
+  // Separar analista de trasnocho — usa índice del historial real, fallback a weekOfYear % n
   const TRASNOCHO = { inicio: '22:00', fin: '06:00', label: '22-06', startH: 22, endH: 30 }
-  const trasnochIdx = weekOfYear % n
+  const trasnochIdx = options.trasnochIdx !== undefined ? options.trasnochIdx : (weekOfYear % n)
   const analistaTrasnocho = (forzarTrasnocho && n > 1) ? analistas[trasnochIdx] : null
   const analistasReg = analistaTrasnocho ? analistas.filter((_, i) => i !== trasnochIdx) : analistas
   const nReg = analistasReg.length
@@ -935,6 +935,7 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
   const [forzarTrasnocho, setForzarTrasnocho] = useState(false)
+  const [ultimoTrasnocho, setUltimoTrasnocho] = useState(null) // agente que hizo el último trasnocho
 
   useEffect(() => {
     setForzarTrasnocho(lineaGen.toUpperCase().includes('ESPECIALIZADO'))
@@ -944,9 +945,14 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
     if (!lineaGen) return
     setLoadingAna(true)
     setSchedule(null)
-    getAnalistasLinea(lineaGen).then(list => {
+    setUltimoTrasnocho(null)
+    Promise.all([
+      getAnalistasLinea(lineaGen),
+      getUltimoTrasnocho(lineaGen),
+    ]).then(([list, ultimo]) => {
       setAnalistas(list)
       setActivos(new Set(list))
+      setUltimoTrasnocho(ultimo)
       setLoadingAna(false)
     })
   }, [lineaGen])
@@ -958,11 +964,19 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
 
   const hasWFM = wfmData.some(r => r.linea.toLowerCase() === lineaGen.toLowerCase())
 
+  function calcTrasnochIdx(lista) {
+    if (!ultimoTrasnocho) return 0
+    const lastIdx = lista.findIndex(a => a.toLowerCase() === ultimoTrasnocho.toLowerCase())
+    if (lastIdx === -1) return 0
+    return (lastIdx + 1) % lista.length
+  }
+
   function handleGenerar() {
     const lista = analistas.filter(a => activos.has(a))
     if (!lista.length) return setErr('Selecciona al menos un analista')
     if (forzarTrasnocho && lista.length < 2) return setErr('Se necesitan al menos 2 analistas para incluir un turno trasnocho')
-    const result = genSchedule(lista, heatmap, objetivo, lunes, { forzarTrasnocho })
+    const trasnochIdx = forzarTrasnocho ? calcTrasnochIdx(lista) : undefined
+    const result = genSchedule(lista, heatmap, objetivo, lunes, { forzarTrasnocho, trasnochIdx })
     if (!result) return setErr('No hay suficientes datos de demanda para generar turnos')
     setErr(null)
     setSchedule(result)
@@ -1078,11 +1092,23 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
               </label>
             )}
 
-            {forzarTrasnocho && analistas.length > 0 && (
-              <p className="text-[10px] text-indigo-600 bg-indigo-50 rounded px-2 py-1">
-                🌙 Trasnocho asignado a: <strong>{analistas.filter(a => activos.has(a)).at(-1) ?? '—'}</strong>
-              </p>
-            )}
+            {forzarTrasnocho && analistas.length > 0 && (() => {
+              const lista = analistas.filter(a => activos.has(a))
+              const lastIdx = ultimoTrasnocho ? lista.findIndex(a => a.toLowerCase() === ultimoTrasnocho.toLowerCase()) : -1
+              const nextIdx = lastIdx === -1 ? 0 : (lastIdx + 1) % lista.length
+              const siguiente = lista[nextIdx] ?? '—'
+              return (
+                <div className="bg-indigo-50 rounded-lg px-3 py-2 space-y-0.5">
+                  {ultimoTrasnocho && (
+                    <p className="text-[10px] text-indigo-400">Último trasnocho: <strong>{ultimoTrasnocho}</strong></p>
+                  )}
+                  <p className="text-xs text-indigo-700 font-medium flex items-center gap-1">
+                    <Moon className="w-3 h-3" /> Esta semana le toca: <strong>{siguiente}</strong>
+                  </p>
+                  {!ultimoTrasnocho && <p className="text-[10px] text-indigo-400">Sin historial — se asigna al primero de la lista</p>}
+                </div>
+              )
+            })()}
 
             {lineaGen && !loadingAna && analistas.length === 0 ? (
               <div className="bg-gray-50 rounded-lg px-3 py-5 text-xs text-gray-500 text-center">

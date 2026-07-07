@@ -1450,3 +1450,18 @@ export async function saveTurnosProgramadosBulk(rows, linea) {
   }
   return rows.length
 }
+
+// Devuelve el agente que más recientemente hizo un turno trasnocho (22:00) en una línea
+export async function getUltimoTrasnocho(linea) {
+  const { data } = await supabase
+    .from('vip_turnos_programados')
+    .select('agente, fecha')
+    .ilike('linea_atencion', linea)
+    .eq('turno_inicio', '22:00')
+    .not('agente', 'is', null)
+    .order('fecha', { ascending: false })
+    .limit(20)
+  if (!data?.length) return null
+  // Devuelve el agente con la fecha más reciente
+  return data[0].agente
+}
