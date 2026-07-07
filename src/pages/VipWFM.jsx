@@ -210,11 +210,18 @@ function findBestShifts(required) {
   }))
 }
 
-function genSchedule(analistas, heatmap, objetivo, lunes) {
-  const DOW_MAP   = [1, 2, 3, 4, 5, 6, 0]
+function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
+  const { forzarTrasnocho = false } = options
+  const DOW_MAP    = [1, 2, 3, 4, 5, 6, 0]
   const DIA_LABELS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
   const n = analistas.length
   if (!n) return null
+
+  // Separar analista de trasnocho (el último de la lista, rotativo)
+  const TRASNOCHO = { inicio: '16:00', fin: null, label: '16-00', startH: 16, endH: 24 }
+  const analistaTrasnocho = (forzarTrasnocho && n > 1) ? analistas[n - 1] : null
+  const analistasReg = analistaTrasnocho ? analistas.slice(0, -1) : analistas
+  const nReg = analistasReg.length
 
   const required = Array.from({ length: 7 }, (_, d) => {
     const dow = DOW_MAP[d]
@@ -231,11 +238,11 @@ function genSchedule(analistas, heatmap, objetivo, lunes) {
   const startOfYear = new Date(lunes.getFullYear(), 0, 1)
   const weekOfYear  = Math.floor((lunes - startOfYear) / (7 * 86400000))
 
-  const assignments = analistas.map((analista, idx) => {
+  const assignments = analistasReg.map((analista, idx) => {
     const shiftIdx = (weekOfYear + idx) % shifts.length
     const shift    = shifts[shiftIdx]
-    const offStart = (Math.round(idx * 7 / n) + weekOfYear) % 7
-    const offDays  = new Set([offStart, (offStart + 1) % 7])
+    const offStart = (Math.round(idx * 7 / nReg) + weekOfYear) % 7
+    const offDays  = new Set([offStart])  // 1 día de descanso por semana
 
     const turnos = []
     for (let d = 0; d < 7; d++) {
@@ -253,6 +260,26 @@ function genSchedule(analistas, heatmap, objetivo, lunes) {
     }
     return { analista, shift, offDays, turnos }
   })
+
+  // Analista de trasnocho: 16:00–00:00, 1 día de descanso
+  if (analistaTrasnocho) {
+    const offStart = (Math.round((n - 1) * 7 / n) + weekOfYear) % 7
+    const offDays  = new Set([offStart])
+    const turnos = []
+    for (let d = 0; d < 7; d++) {
+      if (offDays.has(d)) continue
+      turnos.push({
+        agente:       analistaTrasnocho,
+        fecha:        toISO(addDays(lunes, d)),
+        dia_semana:   DIA_LABELS[d],
+        turno_inicio: TRASNOCHO.inicio,
+        turno_fin:    TRASNOCHO.fin,
+        break_inicio: null, break_fin: null,
+        lunch_inicio: null, lunch_fin: null,
+      })
+    }
+    assignments.push({ analista: analistaTrasnocho, shift: TRASNOCHO, offDays, turnos })
+  }
 
   const coverage = Array.from({ length: 7 }, (_, d) =>
     Array.from({ length: 18 }, (_, hi) => {
@@ -906,6 +933,11 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
   const [schedule, setSchedule] = useState(null)
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
+  const [forzarTrasnocho, setForzarTrasnocho] = useState(false)
+
+  useEffect(() => {
+    setForzarTrasnocho(lineaGen.toUpperCase().includes('ESPECIALIZADO'))
+  }, [lineaGen])
 
   useEffect(() => {
     if (!lineaGen) return
@@ -928,7 +960,8 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
   function handleGenerar() {
     const lista = analistas.filter(a => activos.has(a))
     if (!lista.length) return setErr('Selecciona al menos un analista')
-    const result = genSchedule(lista, heatmap, objetivo, lunes)
+    if (forzarTrasnocho && lista.length < 2) return setErr('Se necesitan al menos 2 analistas para incluir un turno trasnocho')
+    const result = genSchedule(lista, heatmap, objetivo, lunes, { forzarTrasnocho })
     if (!result) return setErr('No hay suficientes datos de demanda para generar turnos')
     setErr(null)
     setSchedule(result)
@@ -1026,7 +1059,31 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
                 </div>
                 <p className="text-[10px] text-gray-400">Analistas con turnos en los últimos 28 días para esta línea.</p>
               </div>
-            ) : lineaGen && !loadingAna ? (
+            ) : null}
+
+            {/* Opción trasnocho */}
+            {analistas.length > 0 && (
+              <label className="flex items-center gap-2.5 px-3 py-2 rounded-lg border border-gray-200 cursor-pointer hover:bg-gray-50 select-none">
+                <input
+                  type="checkbox"
+                  checked={forzarTrasnocho}
+                  onChange={e => setForzarTrasnocho(e.target.checked)}
+                  className="rounded text-indigo-600 w-3.5 h-3.5"
+                />
+                <div>
+                  <p className="text-xs font-medium text-gray-700">Incluir turno trasnocho (16:00 – 00:00)</p>
+                  <p className="text-[10px] text-gray-400">El último analista de la lista rotará en turno nocturno toda la semana</p>
+                </div>
+              </label>
+            )}
+
+            {forzarTrasnocho && analistas.length > 0 && (
+              <p className="text-[10px] text-indigo-600 bg-indigo-50 rounded px-2 py-1">
+                🌙 Trasnocho asignado a: <strong>{analistas.filter(a => activos.has(a)).at(-1) ?? '—'}</strong>
+              </p>
+            )}
+
+            {lineaGen && !loadingAna && analistas.length === 0 ? (
               <div className="bg-gray-50 rounded-lg px-3 py-5 text-xs text-gray-500 text-center">
                 No se encontraron analistas con turnos recientes para <strong>{lineaGen}</strong>.
                 <br /><span className="text-gray-400">Programa turnos manualmente primero o impórtalos desde la hoja.</span>
