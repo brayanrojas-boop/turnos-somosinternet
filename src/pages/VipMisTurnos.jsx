@@ -1474,13 +1474,18 @@ function BreaksMonitor() {
   const base    = filtroLinea ? activos.filter(t => t.linea_atencion === filtroLinea) : activos
 
   const eventos = []
+  const _seen = new Set()
   for (const t of base) {
     const bIni = toH(t.break_inicio); const bFin = toH(t.break_fin)
     const lIni = toH(t.lunch_inicio); const lFin = toH(t.lunch_fin)
-    if (bIni !== null && bFin !== null)
-      eventos.push({ tipo: 'pausa', agente: t.agente, linea: t.linea_atencion, ini: bIni, fin: bFin, iniStr: fmtT(t.break_inicio), finStr: fmtT(t.break_fin), key: `${t.id}-b` })
-    if (lIni !== null && lFin !== null)
-      eventos.push({ tipo: 'almuerzo', agente: t.agente, linea: t.linea_atencion, ini: lIni, fin: lFin, iniStr: fmtT(t.lunch_inicio), finStr: fmtT(t.lunch_fin), key: `${t.id}-l` })
+    if (bIni !== null && bFin !== null) {
+      const k = `${t.agente}-b-${bIni}-${bFin}`
+      if (!_seen.has(k)) { _seen.add(k); eventos.push({ tipo: 'pausa', agente: t.agente, linea: t.linea_atencion, ini: bIni, fin: bFin, iniStr: fmtT(t.break_inicio), finStr: fmtT(t.break_fin), key: k }) }
+    }
+    if (lIni !== null && lFin !== null) {
+      const k = `${t.agente}-l-${lIni}-${lFin}`
+      if (!_seen.has(k)) { _seen.add(k); eventos.push({ tipo: 'almuerzo', agente: t.agente, linea: t.linea_atencion, ini: lIni, fin: lFin, iniStr: fmtT(t.lunch_inicio), finStr: fmtT(t.lunch_fin), key: k }) }
+    }
   }
 
   const enCurso   = eventos.filter(e => now >= e.ini && now <= e.fin).sort((a,b) => a.fin - b.fin)
