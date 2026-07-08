@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getTurnosSemana, getWFMInteracciones, upsertWFMInteracciones, getAnalistasLinea, saveTurnosProgramadosBulk, getRotacionTrasnocho } from '../lib/vip'
+import { getTurnosSemana, getWFMInteracciones, upsertWFMInteracciones, getAnalistasLinea, saveTurnosProgramadosBulk, getRotacionTrasnocho, exportarTurnosASheet } from '../lib/vip'
 import { ChevronLeft, ChevronRight, Users, TrendingUp, AlertTriangle, Settings2, Upload, X, CheckCircle, CalendarPlus, Moon } from 'lucide-react'
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
@@ -988,6 +988,7 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
         a.turnos.map(t => ({ ...t, linea_atencion: lineaGen }))
       )
       await saveTurnosProgramadosBulk(rows, lineaGen)
+      exportarTurnosASheet(rows).catch(() => {}) // respaldo en Sheet, fire-and-forget
       onSaved()
       onClose()
     } catch (e) {

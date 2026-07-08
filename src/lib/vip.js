@@ -1148,6 +1148,19 @@ export async function aplicarCambioEnSheet(url, secret, cambio) {
   if (!json.ok) throw new Error(json.error ?? 'Error en el Sheet')
 }
 
+// Exporta turnos generados al Sheet (bulk_insert): reemplaza filas de esa línea+semana
+export async function exportarTurnosASheet(rows) {
+  const url    = (typeof localStorage !== 'undefined' ? localStorage.getItem('vip_script_url')    : null)?.trim()
+  const secret = (typeof localStorage !== 'undefined' ? localStorage.getItem('vip_script_secret') : null)?.trim()
+  if (!url || !secret) return
+  await fetch(url, {
+    method: 'POST',
+    redirect: 'follow',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ secret, action: 'bulk_insert', rows }),
+  })
+}
+
 // Sincroniza una fila individual al Sheet (action: 'update' crea si no existe)
 export async function sincronizarTurnoEnSheet(url, secret, agente, fecha, campos) {
   if (!url?.trim() || !secret?.trim()) return
