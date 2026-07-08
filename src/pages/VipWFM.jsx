@@ -236,14 +236,18 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
     })
   })
 
-  // Con trasnocho activo: 3 franjas fijas para cobertura 24/7 (06-14 · 14-22 · 22-06)
+  // Con trasnocho activo: 7 franjas fijas de 8h para cobertura 24/7 (los analistas rotan una franja/semana)
   // Sin trasnocho: franjas basadas en demanda
-  const shifts = forzarTrasnocho
-    ? [
-        { inicio: '06:00', fin: '14:00', label: '06-14', startH: 6,  endH: 14 },
-        { inicio: '14:00', fin: '22:00', label: '14-22', startH: 14, endH: 22 },
-      ]
-    : findBestShifts(required)
+  const SHIFTS_ESPECIALIZADO = [
+    { inicio: '02:00', fin: '10:00', label: '02-10', startH: 2,  endH: 10 },
+    { inicio: '06:00', fin: '14:00', label: '06-14', startH: 6,  endH: 14 },
+    { inicio: '07:00', fin: '15:00', label: '07-15', startH: 7,  endH: 15 },
+    { inicio: '09:00', fin: '17:00', label: '09-17', startH: 9,  endH: 17 },
+    { inicio: '11:00', fin: '19:00', label: '11-19', startH: 11, endH: 19 },
+    { inicio: '12:00', fin: '20:00', label: '12-20', startH: 12, endH: 20 },
+    { inicio: '14:00', fin: '22:00', label: '14-22', startH: 14, endH: 22 },
+  ]
+  const shifts = forzarTrasnocho ? SHIFTS_ESPECIALIZADO : findBestShifts(required)
   if (!shifts.length) return null
 
   const assignments = analistasReg.map((analista, idx) => {
