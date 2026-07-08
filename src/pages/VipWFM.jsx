@@ -220,11 +220,16 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
   const startOfYear = new Date(lunes.getFullYear(), 0, 1)
   const weekOfYear  = Math.floor((lunes - startOfYear) / (7 * 86400000))
 
-  // Separar analista de trasnocho — usa índice del historial real, fallback a weekOfYear % n
   const TRASNOCHO = { inicio: '22:00', fin: '06:00', label: '22-06', startH: 22, endH: 30 }
-  const trasnochIdx = options.trasnochIdx !== undefined ? options.trasnochIdx : (weekOfYear % n)
-  const analistaTrasnocho = (forzarTrasnocho && n > 1) ? analistas[trasnochIdx] : null
-  const analistasReg = analistaTrasnocho ? analistas.filter((_, i) => i !== trasnochIdx) : analistas
+  // Persona A = trasnocho actual  |  Persona B = próximo trasnocho (pre-trasnocho)
+  const trasnochIdx   = options.trasnochIdx   !== undefined ? options.trasnochIdx   : (weekOfYear % n)
+  const preTrasnoIdx  = options.preTrasnoIdx  !== undefined ? options.preTrasnoIdx  : ((trasnochIdx + 1) % n)
+  const analistaTrasnocho    = (forzarTrasnocho && n > 2) ? analistas[trasnochIdx]  : null
+  const analistaPreTrasnocho = (forzarTrasnocho && n > 2) ? analistas[preTrasnoIdx] : null
+  // Analistas regulares: todos excepto A y B
+  const analistasReg = forzarTrasnocho
+    ? analistas.filter((_, i) => i !== trasnochIdx && i !== preTrasnoIdx)
+    : analistas
   const nReg = analistasReg.length
 
   const required = Array.from({ length: 7 }, (_, d) => {
@@ -236,72 +241,87 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
     })
   })
 
-  // Con trasnocho activo: 7 franjas fijas de 8h para cobertura 24/7 (los analistas rotan una franja/semana)
-  // Sin trasnocho: franjas basadas en demanda
-  const SHIFTS_ESPECIALIZADO = [
+  // 6 franjas rotativas para los analistas regulares (los demás cubren 22-06)
+  const SHIFTS_REG = [
     { inicio: '06:00', fin: '14:00', label: '06-14', startH: 6,  endH: 14 },
     { inicio: '07:00', fin: '15:00', label: '07-15', startH: 7,  endH: 15 },
     { inicio: '09:00', fin: '17:00', label: '09-17', startH: 9,  endH: 17 },
-    { inicio: '11:00', fin: '19:00', label: '11-19', startH: 11, endH: 19 },
     { inicio: '12:00', fin: '20:00', label: '12-20', startH: 12, endH: 20 },
     { inicio: '14:00', fin: '22:00', label: '14-22', startH: 14, endH: 22 },
-    { inicio: '14:00', fin: '22:00', label: '14-22', startH: 14, endH: 22 }, // siempre 2 personas en este turno
+    { inicio: '14:00', fin: '22:00', label: '14-22', startH: 14, endH: 22 },
   ]
-  const shifts = forzarTrasnocho ? SHIFTS_ESPECIALIZADO : findBestShifts(required)
+  const shifts = forzarTrasnocho ? SHIFTS_REG : findBestShifts(required)
   if (!shifts.length) return null
 
   const assignments = analistasReg.map((analista, idx) => {
-    const shiftIdx = (weekOfYear + idx) % shifts.length  // rota 1 franja por semana
+    const shiftIdx = (weekOfYear + idx) % shifts.length
     const shift    = shifts[shiftIdx]
     const offStart = (Math.round(idx * 7 / nReg) + weekOfYear) % 7
     const offDays  = new Set([offStart])
-
     const turnos = []
     for (let d = 0; d < 7; d++) {
       if (offDays.has(d)) continue
       if (!required[d].some(r => r > 0)) continue
       turnos.push({
-        agente:       analista,
-        fecha:        toISO(addDays(lunes, d)),
-        dia_semana:   DIA_LABELS[d],
-        turno_inicio: shift.inicio,
-        turno_fin:    shift.fin,
-        break_inicio: null, break_fin: null,
-        lunch_inicio: null, lunch_fin: null,
+        agente: analista, fecha: toISO(addDays(lunes, d)), dia_semana: DIA_LABELS[d],
+        turno_inicio: shift.inicio, turno_fin: shift.fin,
+        break_inicio: null, break_fin: null, lunch_inicio: null, lunch_fin: null,
       })
     }
     return { analista, shift, offDays, turnos }
   })
 
-  // Analista de trasnocho: descansa SIEMPRE el viernes (para iniciar el sábado en la noche)
+  // Persona A (trasnocho actual): Lun–Vie 22-06 · Sáb–Dom DESCANSO
   if (analistaTrasnocho) {
-    const VIERNES = 4  // Lun=0 … Vie=4 … Dom=6
-    const offDays = new Set([VIERNES])
+    const offDays = new Set([5, 6]) // Sáb=5 Dom=6
     const turnos = []
-    for (let d = 0; d < 7; d++) {
-      if (offDays.has(d)) continue
+    for (let d = 0; d <= 4; d++) { // Lun(0) a Vie(4)
       turnos.push({
-        agente:       analistaTrasnocho,
-        fecha:        toISO(addDays(lunes, d)),
-        dia_semana:   DIA_LABELS[d],
-        turno_inicio: TRASNOCHO.inicio,
-        turno_fin:    TRASNOCHO.fin,
-        break_inicio: null, break_fin: null,
-        lunch_inicio: null, lunch_fin: null,
+        agente: analistaTrasnocho, fecha: toISO(addDays(lunes, d)), dia_semana: DIA_LABELS[d],
+        turno_inicio: TRASNOCHO.inicio, turno_fin: TRASNOCHO.fin,
+        break_inicio: null, break_fin: null, lunch_inicio: null, lunch_fin: null,
       })
     }
     assignments.push({ analista: analistaTrasnocho, shift: TRASNOCHO, offDays, turnos })
   }
 
-  const coverage = Array.from({ length: 7 }, (_, d) =>
-    Array.from({ length: 18 }, (_, hi) => {
+  // Persona B (próximo trasnocho): Lun–Jue 11-19 · Vie DESCANSO · Sáb–Dom 22-06
+  if (analistaPreTrasnocho) {
+    const PRE = { inicio: '11:00', fin: '19:00', label: '11-19', startH: 11, endH: 19 }
+    const offDays = new Set([4]) // Vie=4
+    const turnos = []
+    for (let d = 0; d <= 3; d++) { // Lun–Jue en turno 11-19
+      turnos.push({
+        agente: analistaPreTrasnocho, fecha: toISO(addDays(lunes, d)), dia_semana: DIA_LABELS[d],
+        turno_inicio: PRE.inicio, turno_fin: PRE.fin,
+        break_inicio: null, break_fin: null, lunch_inicio: null, lunch_fin: null,
+      })
+    }
+    for (let d = 5; d <= 6; d++) { // Sáb–Dom inicia trasnocho
+      turnos.push({
+        agente: analistaPreTrasnocho, fecha: toISO(addDays(lunes, d)), dia_semana: DIA_LABELS[d],
+        turno_inicio: TRASNOCHO.inicio, turno_fin: TRASNOCHO.fin,
+        break_inicio: null, break_fin: null, lunch_inicio: null, lunch_fin: null,
+      })
+    }
+    assignments.push({ analista: analistaPreTrasnocho, shift: PRE, offDays, turnos })
+  }
+
+  // Cobertura basada en turnos reales (preciso para personas con franjas mixtas)
+  const coverage = Array.from({ length: 7 }, (_, d) => {
+    const fechaD = toISO(addDays(lunes, d))
+    return Array.from({ length: 18 }, (_, hi) => {
       const h = hi + 6
       return assignments.reduce((sum, a) => {
-        if (a.offDays.has(d) || !required[d].some(r => r > 0)) return sum
-        return (h >= a.shift.startH && h < a.shift.endH) ? sum + 1 : sum
+        const t = a.turnos.find(t => t.fecha === fechaD)
+        if (!t) return sum
+        const shH = parseInt(t.turno_inicio.split(':')[0])
+        const ehH = parseInt(t.turno_fin.split(':')[0])
+        const endAdj = ehH < shH ? ehH + 24 : ehH
+        return (h >= shH && h < endAdj) ? sum + 1 : sum
       }, 0)
     })
-  )
+  })
 
   return { assignments, shifts, required, coverage }
 }
@@ -977,15 +997,18 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
   function handleGenerar() {
     const lista = analistas.filter(a => activos.has(a))
     if (!lista.length) return setErr('Selecciona al menos un analista')
-    if (forzarTrasnocho && lista.length < 2) return setErr('Se necesitan al menos 2 analistas para incluir un turno trasnocho')
-    let trasnochIdx = undefined
+    if (forzarTrasnocho && lista.length < 3) return setErr('Se necesitan al menos 3 analistas para el ciclo de trasnocho')
+    let trasnochIdx = undefined, preTrasnoIdx = undefined
     if (forzarTrasnocho) {
-      const activosEnRotacion = rotacion.historial.filter(h => activos.has(h.agente))
-      const siguiente = activosEnRotacion[0]?.agente || null
-      const idx = siguiente ? lista.findIndex(a => a.toLowerCase() === siguiente.toLowerCase()) : 0
-      trasnochIdx = idx === -1 ? 0 : idx
+      const activosOrden = rotacion.historial.filter(h => activos.has(h.agente))
+      const sigA = activosOrden[0]?.agente || null
+      const sigB = activosOrden[1]?.agente || null
+      trasnochIdx  = sigA ? lista.findIndex(a => a.toLowerCase() === sigA.toLowerCase()) : 0
+      if (trasnochIdx  === -1) trasnochIdx  = 0
+      preTrasnoIdx = sigB ? lista.findIndex(a => a.toLowerCase() === sigB.toLowerCase()) : (trasnochIdx + 1) % lista.length
+      if (preTrasnoIdx === -1) preTrasnoIdx = (trasnochIdx + 1) % lista.length
     }
-    const result = genSchedule(lista, heatmap, objetivo, lunes, { forzarTrasnocho, trasnochIdx })
+    const result = genSchedule(lista, heatmap, objetivo, lunes, { forzarTrasnocho, trasnochIdx, preTrasnoIdx })
     if (!result) return setErr('No hay suficientes datos de demanda para generar turnos')
     setErr(null)
     setSchedule(result)
@@ -1103,8 +1126,9 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
             )}
 
             {forzarTrasnocho && analistas.length > 0 && (() => {
-              const activosEnRotacion = rotacion.historial.filter(h => activos.has(h.agente))
-              const siguienteAgente = activosEnRotacion[0]?.agente || null
+              const activosOrden = rotacion.historial.filter(h => activos.has(h.agente))
+              const personaA = activosOrden[0]?.agente || null // trasnocho esta semana
+              const personaB = activosOrden[1]?.agente || null // pre-trasnocho (inicia sábado)
               return (
                 <div className="bg-indigo-50 rounded-lg px-3 py-2.5 space-y-2">
                   <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
@@ -1113,22 +1137,26 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
                   <div className="bg-white rounded-lg divide-y divide-gray-100 overflow-hidden">
                     {rotacion.historial.map(r => {
                       const activo = activos.has(r.agente)
-                      const esSiguiente = r.agente === siguienteAgente
+                      const esA = r.agente === personaA
+                      const esB = r.agente === personaB
                       return (
-                        <div key={r.agente} className={`flex items-center justify-between px-2.5 py-1.5 text-[11px] ${esSiguiente ? 'bg-indigo-100 font-semibold text-indigo-800' : activo ? 'text-gray-600' : 'text-gray-300'}`}>
+                        <div key={r.agente} className={`flex items-center justify-between px-2.5 py-1.5 text-[11px]
+                          ${esA ? 'bg-indigo-100 font-semibold text-indigo-800' : esB ? 'bg-amber-50 font-medium text-amber-800' : activo ? 'text-gray-600' : 'text-gray-300'}`}>
                           <span className="flex items-center gap-1.5">
-                            {esSiguiente ? <Moon className="w-2.5 h-2.5 text-indigo-500" /> : <span className="w-2.5 inline-block" />}
+                            {esA ? <Moon className="w-2.5 h-2.5 text-indigo-500" /> : esB ? <span className="text-[10px]">→</span> : <span className="w-2.5 inline-block" />}
                             {r.agente}
+                            {esA && <span className="text-[9px] bg-indigo-200 text-indigo-700 px-1 rounded">Lun–Vie 22-06</span>}
+                            {esB && <span className="text-[9px] bg-amber-200 text-amber-700 px-1 rounded">Lun–Jue 11-19 · Vie D · Sáb–Dom 22-06</span>}
                             {!activo && <span className="text-[10px] font-normal">(excluido)</span>}
                           </span>
-                          <span className={`text-[10px] ${esSiguiente ? 'text-indigo-500' : 'text-gray-400'}`}>
+                          <span className={`text-[10px] ${esA ? 'text-indigo-500' : esB ? 'text-amber-500' : 'text-gray-400'}`}>
                             {r.ultimaFecha ?? 'Nunca'}
                           </span>
                         </div>
                       )
                     })}
                   </div>
-                  {!siguienteAgente && <p className="text-[10px] text-indigo-400">Selecciona analistas para ver la rotación</p>}
+                  {!personaA && <p className="text-[10px] text-indigo-400">Selecciona analistas para ver la rotación</p>}
                 </div>
               )
             })()}
