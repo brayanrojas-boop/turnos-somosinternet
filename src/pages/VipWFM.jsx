@@ -237,13 +237,17 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
   })
 
   const shifts = findBestShifts(required)
+  // Con trasnocho activo: forzar franja 06:00-14:00 para cubrir el relevo al terminar el nocturno
+  if (forzarTrasnocho && !shifts.some(s => s.startH === 6)) {
+    shifts.unshift({ inicio: '06:00', fin: '14:00', label: '06-14', startH: 6, endH: 14 })
+  }
   if (!shifts.length) return null
 
   const assignments = analistasReg.map((analista, idx) => {
-    const shiftIdx = (weekOfYear + idx) % shifts.length
+    const shiftIdx = (weekOfYear + idx) % shifts.length  // rota 1 franja por semana
     const shift    = shifts[shiftIdx]
     const offStart = (Math.round(idx * 7 / nReg) + weekOfYear) % 7
-    const offDays  = new Set([offStart])  // 1 día de descanso por semana
+    const offDays  = new Set([offStart])
 
     const turnos = []
     for (let d = 0; d < 7; d++) {
@@ -262,10 +266,10 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
     return { analista, shift, offDays, turnos }
   })
 
-  // Analista de trasnocho: 16:00–00:00, 1 día de descanso
+  // Analista de trasnocho: descansa SIEMPRE el viernes (para iniciar el sábado en la noche)
   if (analistaTrasnocho) {
-    const offStart = (Math.round((n - 1) * 7 / n) + weekOfYear) % 7
-    const offDays  = new Set([offStart])
+    const VIERNES = 4  // Lun=0 … Vie=4 … Dom=6
+    const offDays = new Set([VIERNES])
     const turnos = []
     for (let d = 0; d < 7; d++) {
       if (offDays.has(d)) continue
