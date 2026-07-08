@@ -182,6 +182,28 @@ function calcKPIs(lunes, cobertura) {
   return { totalHoras, avgAgentes, peakHora, maxAgentes }
 }
 
+// ── Erlang C / Service Level ─────────────────────────────────────────────────
+function erlangC(N, A) {
+  if (N <= 0 || A <= 0) return 0
+  if (A >= N) return 1
+  let term = 1, sum = 1
+  for (let k = 1; k < N; k++) { term *= A / k; sum += term }
+  term *= A / N
+  const num = term * N / (N - A)
+  return num / (sum + num)
+}
+
+// agents × concurrentPerAgent = servidores totales; AHT y targetMin en minutos
+function calcSLHora(agents, demandPerHour, ahtMinutes, targetMinutes = 5, concurrentPerAgent = 5) {
+  const N = agents * concurrentPerAgent
+  if (N <= 0) return null
+  if (demandPerHour <= 0) return 1.0
+  const A = demandPerHour * (ahtMinutes / 60)
+  if (A >= N) return 0.0
+  const pWait = erlangC(N, A)
+  return Math.max(0, Math.min(1, 1 - pWait * Math.exp(-(N - A) * (targetMinutes / ahtMinutes))))
+}
+
 // ── Auto-scheduler helpers ────────────────────────────────────────────────────
 function findBestShifts(required) {
   const scores = []
@@ -327,13 +349,18 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
 }
 
 // ── BarChart ──────────────────────────────────────────────────────────────────
-function BarChart({ data, recomendado }) {
+function BarChart({ data, recomendado, slData = [] }) {
   const max = Math.max(...data.map(d => d.count), recomendado, 1)
   const HORAS = Array.from({ length: 18 }, (_, i) => i + 6)
+  const hasSL = slData.some(v => v !== null)
+
+  const slPoints = slData
+    .map((sl, i) => sl !== null ? `${((i + 0.5) / 18) * 100},${(1 - sl) * 100}` : null)
+    .filter(Boolean)
 
   return (
     <div className="flex gap-2 items-stretch">
-      {/* Eje Y */}
+      {/* Eje Y izquierdo */}
       <div className="flex gap-0.5 items-stretch pb-5 shrink-0">
         <div className="flex items-center justify-center" style={{ width: '14px' }}>
           <span
@@ -389,6 +416,38 @@ function BarChart({ data, recomendado }) {
               )
             })}
           </div>
+          {/* Overlay SL — línea Erlang C */}
+          {hasSL && (
+            <svg
+              viewBox="0 0 100 100"
+              preserveAspectRatio="none"
+              className="absolute inset-0 w-full h-full pointer-events-none z-20"
+            >
+              {/* Objetivo 90% — línea roja punteada */}
+              <line x1="0" y1="10" x2="100" y2="10"
+                stroke="#ef4444" strokeWidth="0.9" strokeDasharray="2.5,2" opacity="0.75" />
+              {/* Curva SL */}
+              {slPoints.length > 1 && (
+                <polyline
+                  points={slPoints.join(' ')}
+                  fill="none" stroke="#6366f1" strokeWidth="1.6"
+                  strokeLinejoin="round" strokeLinecap="round"
+                />
+              )}
+              {/* Puntos por hora */}
+              {slData.map((sl, i) => sl !== null ? (
+                <circle
+                  key={i}
+                  cx={((i + 0.5) / 18) * 100}
+                  cy={(1 - sl) * 100}
+                  r="1.6"
+                  fill={sl >= 0.9 ? '#22c55e' : sl >= 0.5 ? '#f59e0b' : '#ef4444'}
+                >
+                  <title>{`${i + 6}:00 — SL estimado: ${Math.round(sl * 100)}%`}</title>
+                </circle>
+              ) : null)}
+            </svg>
+          )}
         </div>
         {/* Eje X: horas */}
         <div className="flex gap-px">
@@ -401,6 +460,25 @@ function BarChart({ data, recomendado }) {
           Hora del día →
         </div>
       </div>
+      {/* Eje Y derecho: SL% */}
+      {hasSL && (
+        <div className="flex gap-0.5 items-stretch pb-5 shrink-0">
+          <div className="relative flex flex-col justify-between items-start" style={{ width: '26px' }}>
+            <span className="text-[8px] text-gray-400 leading-none">100%</span>
+            <span
+              className="absolute text-[8px] text-red-400 leading-none font-medium"
+              style={{ top: '10%', transform: 'translateY(-50%)' }}
+            >90%</span>
+            <span className="text-[8px] text-gray-400 leading-none">0%</span>
+          </div>
+          <div className="flex items-center justify-center" style={{ width: '12px' }}>
+            <span
+              className="text-[8px] text-indigo-400 font-medium tracking-widest select-none"
+              style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
+            >SL</span>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -608,6 +686,7 @@ export default function VipWFM() {
   const [wfmData, setWfmData] = useState([])
   const [loading, setLoading] = useState(true)
   const [objetivo, setObjetivo] = useState(4)
+  const [aht, setAht] = useState(20)
   const [showConfig, setShowConfig] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
@@ -677,6 +756,20 @@ export default function VipWFM() {
     })
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) || 1
   }, [diaIdx, heatmap, objetivo])
+
+  // SL estimado por hora (Erlang C): 5 casos concurrentes/analista, objetivo 5 min
+  const slData = useMemo(() => {
+    const dow = PILL_TO_DOW[diaIdx]
+    const fecha = toISO(addDays(lunes, diaIdx))
+    return Array.from({ length: 18 }, (_, i) => {
+      const h = i + 6
+      const agents = cobertura[`${fecha}_${h}`] || 0
+      const demand = (heatmap.byDowHour[dow]?.[h] || 0) / heatmap.weekCount
+      if (!hasWFMData) return null
+      if (demand <= 0) return agents > 0 ? 1.0 : null
+      return calcSLHora(agents, demand, aht, 5, 5)
+    })
+  }, [lunes, diaIdx, cobertura, heatmap, aht, hasWFMData])
 
   const mesLabel = useMemo(
     () => MESES[lunes.getMonth()] + ' ' + lunes.getFullYear(),
@@ -753,13 +846,20 @@ export default function VipWFM() {
       {showConfig && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center gap-4 flex-wrap">
           <Settings2 className="w-4 h-4 text-indigo-500 shrink-0" />
-          <label className="text-xs text-indigo-800 font-medium">Interacciones por agente/hora (objetivo):</label>
+          <label className="text-xs text-indigo-800 font-medium">Casos por agente/hora (objetivo):</label>
           <input
             type="number" min={1} max={20} value={objetivo}
             onChange={e => setObjetivo(Math.max(1, Number(e.target.value)))}
             className="w-16 text-xs border border-indigo-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
-          <span className="text-xs text-indigo-500">Usado para calcular agentes recomendados</span>
+          <span className="text-xs text-indigo-500 mr-4">Para calcular agentes recomendados</span>
+          <label className="text-xs text-indigo-800 font-medium">AHT (min):</label>
+          <input
+            type="number" min={1} max={120} value={aht}
+            onChange={e => setAht(Math.max(1, Number(e.target.value)))}
+            className="w-16 text-xs border border-indigo-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <span className="text-xs text-indigo-500">Tiempo promedio de atención · Para calcular SL estimado (Erlang C)</span>
         </div>
       )}
 
@@ -828,7 +928,7 @@ export default function VipWFM() {
           <div className="h-36 animate-pulse bg-gray-50 rounded-lg" />
         ) : (
           <>
-            <BarChart data={barData} recomendado={recomendadoDia} />
+            <BarChart data={barData} recomendado={recomendadoDia} slData={slData} />
             <div className="flex gap-4 mt-3 flex-wrap">
               <LegendItem color="bg-green-500" label={`≥ recomendado (${recomendadoDia} ag.)`} />
               <LegendItem color="bg-amber-400" label="50–99%" />
@@ -837,6 +937,18 @@ export default function VipWFM() {
                 <span className="inline-block w-6 border-t-2 border-dashed border-indigo-400" />
                 Recomendado
               </span>
+              {slData.some(v => v !== null) && (
+                <>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <span className="inline-block w-6 border-t-2 border-indigo-500" />
+                    SL estimado
+                  </span>
+                  <span className="flex items-center gap-1.5 text-xs text-gray-400">
+                    <span className="inline-block w-6 border-t border-dashed border-red-400" />
+                    Objetivo 90%
+                  </span>
+                </>
+              )}
             </div>
           </>
         )}
