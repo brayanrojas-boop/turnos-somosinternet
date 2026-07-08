@@ -927,7 +927,9 @@ function LegendItem({ color, label }) {
 
 // ── AutoSchedulerModal ────────────────────────────────────────────────────────
 function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved }) {
-  const [lineaGen, setLineaGen] = useState(lineas[0] || '')
+  const [lineaGen, setLineaGen] = useState(
+    lineas.find(l => l.toUpperCase().includes('ESPECIALIZADO')) || lineas[0] || ''
+  )
   const [analistas, setAnalistas] = useState([])
   const [activos, setActivos] = useState(new Set())
   const [loadingAna, setLoadingAna] = useState(false)
