@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useAuth } from '../contexts/AuthContext'
-import { getTurnosSemana, getWFMInteracciones, upsertWFMInteracciones, getAnalistasLinea, saveTurnosProgramadosBulk, getUltimoTrasnocho } from '../lib/vip'
+import { getTurnosSemana, getWFMInteracciones, upsertWFMInteracciones, getAnalistasLinea, saveTurnosProgramadosBulk, getRotacionTrasnocho } from '../lib/vip'
 import { ChevronLeft, ChevronRight, Users, TrendingUp, AlertTriangle, Settings2, Upload, X, CheckCircle, CalendarPlus, Moon } from 'lucide-react'
 
 // ── Helpers de fecha ──────────────────────────────────────────────────────────
@@ -937,7 +937,7 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
   const [saving, setSaving] = useState(false)
   const [err, setErr] = useState(null)
   const [forzarTrasnocho, setForzarTrasnocho] = useState(false)
-  const [ultimoTrasnocho, setUltimoTrasnocho] = useState(null) // agente que hizo el último trasnocho
+  const [rotacion, setRotacion] = useState({ analistas: [], historial: [], siguiente: null })
 
   useEffect(() => {
     setForzarTrasnocho(lineaGen.toUpperCase().includes('ESPECIALIZADO'))
@@ -947,14 +947,11 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
     if (!lineaGen) return
     setLoadingAna(true)
     setSchedule(null)
-    setUltimoTrasnocho(null)
-    Promise.all([
-      getAnalistasLinea(lineaGen),
-      getUltimoTrasnocho(lineaGen),
-    ]).then(([list, ultimo]) => {
-      setAnalistas(list)
-      setActivos(new Set(list))
-      setUltimoTrasnocho(ultimo)
+    setRotacion({ analistas: [], historial: [], siguiente: null })
+    getRotacionTrasnocho(lineaGen).then(rot => {
+      setAnalistas(rot.analistas)
+      setActivos(new Set(rot.analistas))
+      setRotacion(rot)
       setLoadingAna(false)
     })
   }, [lineaGen])
@@ -966,18 +963,17 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
 
   const hasWFM = wfmData.some(r => r.linea.toLowerCase() === lineaGen.toLowerCase())
 
-  function calcTrasnochIdx(lista) {
-    if (!ultimoTrasnocho) return 0
-    const lastIdx = lista.findIndex(a => a.toLowerCase() === ultimoTrasnocho.toLowerCase())
-    if (lastIdx === -1) return 0
-    return (lastIdx + 1) % lista.length
-  }
-
   function handleGenerar() {
     const lista = analistas.filter(a => activos.has(a))
     if (!lista.length) return setErr('Selecciona al menos un analista')
     if (forzarTrasnocho && lista.length < 2) return setErr('Se necesitan al menos 2 analistas para incluir un turno trasnocho')
-    const trasnochIdx = forzarTrasnocho ? calcTrasnochIdx(lista) : undefined
+    let trasnochIdx = undefined
+    if (forzarTrasnocho) {
+      const activosEnRotacion = rotacion.historial.filter(h => activos.has(h.agente))
+      const siguiente = activosEnRotacion[0]?.agente || null
+      const idx = siguiente ? lista.findIndex(a => a.toLowerCase() === siguiente.toLowerCase()) : 0
+      trasnochIdx = idx === -1 ? 0 : idx
+    }
     const result = genSchedule(lista, heatmap, objetivo, lunes, { forzarTrasnocho, trasnochIdx })
     if (!result) return setErr('No hay suficientes datos de demanda para generar turnos')
     setErr(null)
@@ -1095,19 +1091,32 @@ function AutoSchedulerModal({ lineas, wfmData, objetivo, lunes, onClose, onSaved
             )}
 
             {forzarTrasnocho && analistas.length > 0 && (() => {
-              const lista = analistas.filter(a => activos.has(a))
-              const lastIdx = ultimoTrasnocho ? lista.findIndex(a => a.toLowerCase() === ultimoTrasnocho.toLowerCase()) : -1
-              const nextIdx = lastIdx === -1 ? 0 : (lastIdx + 1) % lista.length
-              const siguiente = lista[nextIdx] ?? '—'
+              const activosEnRotacion = rotacion.historial.filter(h => activos.has(h.agente))
+              const siguienteAgente = activosEnRotacion[0]?.agente || null
               return (
-                <div className="bg-indigo-50 rounded-lg px-3 py-2 space-y-0.5">
-                  {ultimoTrasnocho && (
-                    <p className="text-[10px] text-indigo-400">Último trasnocho: <strong>{ultimoTrasnocho}</strong></p>
-                  )}
-                  <p className="text-xs text-indigo-700 font-medium flex items-center gap-1">
-                    <Moon className="w-3 h-3" /> Esta semana le toca: <strong>{siguiente}</strong>
+                <div className="bg-indigo-50 rounded-lg px-3 py-2.5 space-y-2">
+                  <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
+                    <Moon className="w-3 h-3" /> Rotación de trasnocho
                   </p>
-                  {!ultimoTrasnocho && <p className="text-[10px] text-indigo-400">Sin historial — se asigna al primero de la lista</p>}
+                  <div className="bg-white rounded-lg divide-y divide-gray-100 overflow-hidden">
+                    {rotacion.historial.map(r => {
+                      const activo = activos.has(r.agente)
+                      const esSiguiente = r.agente === siguienteAgente
+                      return (
+                        <div key={r.agente} className={`flex items-center justify-between px-2.5 py-1.5 text-[11px] ${esSiguiente ? 'bg-indigo-100 font-semibold text-indigo-800' : activo ? 'text-gray-600' : 'text-gray-300'}`}>
+                          <span className="flex items-center gap-1.5">
+                            {esSiguiente ? <Moon className="w-2.5 h-2.5 text-indigo-500" /> : <span className="w-2.5 inline-block" />}
+                            {r.agente}
+                            {!activo && <span className="text-[10px] font-normal">(excluido)</span>}
+                          </span>
+                          <span className={`text-[10px] ${esSiguiente ? 'text-indigo-500' : 'text-gray-400'}`}>
+                            {r.ultimaFecha ?? 'Nunca'}
+                          </span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                  {!siguienteAgente && <p className="text-[10px] text-indigo-400">Selecciona analistas para ver la rotación</p>}
                 </div>
               )
             })()}

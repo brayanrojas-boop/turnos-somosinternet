@@ -1451,17 +1451,43 @@ export async function saveTurnosProgramadosBulk(rows, linea) {
   return rows.length
 }
 
-// Devuelve el agente que más recientemente hizo un turno trasnocho (22:00) en una línea
-export async function getUltimoTrasnocho(linea) {
-  const { data } = await supabase
+// Devuelve la rotación completa de trasnocho para una línea:
+// - analistas: lista alfabética de activos (últimos 28 días)
+// - historial: ordenado por "más tiempo sin trasnocho" (nunca = primero)
+// - siguiente: agente al que le toca esta semana
+export async function getRotacionTrasnocho(linea) {
+  const desde = new Date()
+  desde.setDate(desde.getDate() - 28)
+  const { data: recientes } = await supabase
+    .from('vip_turnos_programados')
+    .select('agente')
+    .ilike('linea_atencion', linea)
+    .gte('fecha', desde.toISOString().slice(0, 10))
+    .not('agente', 'is', null)
+  const analistas = [...new Set((recientes ?? []).map(r => r.agente).filter(Boolean))].sort()
+  if (!analistas.length) return { analistas: [], historial: [], siguiente: null }
+
+  const { data: hist } = await supabase
     .from('vip_turnos_programados')
     .select('agente, fecha')
     .ilike('linea_atencion', linea)
     .eq('turno_inicio', '22:00')
     .not('agente', 'is', null)
     .order('fecha', { ascending: false })
-    .limit(20)
-  if (!data?.length) return null
-  // Devuelve el agente con la fecha más reciente
-  return data[0].agente
+
+  const ultimaFecha = {}
+  for (const r of (hist ?? [])) {
+    if (!ultimaFecha[r.agente]) ultimaFecha[r.agente] = r.fecha
+  }
+
+  const historial = analistas.map(a => ({
+    agente: a,
+    ultimaFecha: ultimaFecha[a] || null,
+  })).sort((a, b) => {
+    const fa = a.ultimaFecha || '0000-00-00'
+    const fb = b.ultimaFecha || '0000-00-00'
+    return fa < fb ? -1 : fa > fb ? 1 : 0
+  })
+
+  return { analistas, historial, siguiente: historial[0]?.agente || null }
 }
