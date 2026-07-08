@@ -757,6 +757,11 @@ export default function VipWFM() {
     return Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) || 1
   }, [diaIdx, heatmap, objetivo])
 
+  const hasWFMData = useMemo(() => {
+    if (!lineaFiltro) return wfmData.length > 0
+    return wfmData.some(r => r.linea.toLowerCase() === lineaFiltro.toLowerCase())
+  }, [wfmData, lineaFiltro])
+
   // SL estimado por hora (Erlang C): 5 casos concurrentes/analista, objetivo 5 min
   const slData = useMemo(() => {
     const dow = PILL_TO_DOW[diaIdx]
@@ -775,11 +780,6 @@ export default function VipWFM() {
     () => MESES[lunes.getMonth()] + ' ' + lunes.getFullYear(),
     [lunes]
   )
-
-  const hasWFMData = useMemo(() => {
-    if (!lineaFiltro) return wfmData.length > 0
-    return wfmData.some(r => r.linea.toLowerCase() === lineaFiltro.toLowerCase())
-  }, [wfmData, lineaFiltro])
 
   if (!['admin', 'supervisor'].includes(role)) {
     return (
