@@ -236,11 +236,14 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
     })
   })
 
-  const shifts = findBestShifts(required)
-  // Con trasnocho activo: forzar franja 06:00-14:00 para cubrir el relevo al terminar el nocturno
-  if (forzarTrasnocho && !shifts.some(s => s.startH === 6)) {
-    shifts.unshift({ inicio: '06:00', fin: '14:00', label: '06-14', startH: 6, endH: 14 })
-  }
+  // Con trasnocho activo: 3 franjas fijas para cobertura 24/7 (06-14 · 14-22 · 22-06)
+  // Sin trasnocho: franjas basadas en demanda
+  const shifts = forzarTrasnocho
+    ? [
+        { inicio: '06:00', fin: '14:00', label: '06-14', startH: 6,  endH: 14 },
+        { inicio: '14:00', fin: '22:00', label: '14-22', startH: 14, endH: 22 },
+      ]
+    : findBestShifts(required)
   if (!shifts.length) return null
 
   const assignments = analistasReg.map((analista, idx) => {
