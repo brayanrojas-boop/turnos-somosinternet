@@ -1670,6 +1670,8 @@ export default function VipMisTurnos() {
   const [gestionModal, setGModal]     = useState(null)
   const [gestionMotivo, setGMotivo]   = useState('')
   const [gestionGuardando, setGG]     = useState(false)
+  const [gestionProgreso, setGProg]   = useState(null)
+  const [gestionExito, setGExito]     = useState(false)
   const [gestionFA, setGFA]           = useState('')
   const [gestionFL, setGFL]           = useState('')
   // Modo semanal
@@ -1843,14 +1845,32 @@ export default function VipMisTurnos() {
 
   async function handleIntercambioDirecto() {
     if (!gestionModal) return
-    setGG(true)
+    setGG(true); setGExito(false); setGProg(5)
     try {
+      setGProg(15)
       await intercambiarTurnosDirecto(gestionModal.sel1, gestionModal.sel2, profile.full_name, gestionMotivo.trim())
+      setGProg(40)
+
+      let fakeP = 40
+      const ticker = setInterval(() => {
+        fakeP = Math.min(fakeP + 2, 78)
+        setGProg(fakeP)
+      }, 350)
       await _sincSheet(gestionModal.sel1, gestionModal.sel2)
-      setGModal(null)
-      setGMotivo('')
+      clearInterval(ticker)
+      setGProg(85)
+
       await cargar()
-    } catch (e) { alert('Error: ' + e.message) }
+      setGProg(100)
+      setGExito(true)
+
+      setTimeout(() => {
+        setGModal(null); setGMotivo(''); setGProg(null); setGExito(false)
+      }, 2000)
+    } catch (e) {
+      alert('Error: ' + e.message)
+      setGProg(null); setGExito(false)
+    }
     setGG(false)
   }
 
@@ -2843,24 +2863,55 @@ export default function VipMisTurnos() {
               <ArrowLeftRight className="w-3.5 h-3.5"/> Los agentes quedarán intercambiados en esas fechas
             </div>
 
-            <div>
-              <label className="text-xs font-medium text-gray-700 block mb-1">Motivo <span className="text-gray-400">(opcional)</span></label>
-              <textarea value={gestionMotivo} onChange={e => setGMotivo(e.target.value)} rows={2}
-                placeholder="Ej: cubrimiento por incapacidad, ajuste de programación…"
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"/>
-            </div>
+            {gestionExito ? (
+              <div className="flex flex-col items-center gap-2 py-2">
+                <div className="w-12 h-12 rounded-full bg-green-100 flex items-center justify-center">
+                  <CheckCircle className="w-7 h-7 text-green-600" />
+                </div>
+                <p className="text-sm font-semibold text-green-700">¡Intercambio aplicado correctamente!</p>
+                <p className="text-xs text-gray-400">Cerrando en un momento…</p>
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Motivo <span className="text-gray-400">(opcional)</span></label>
+                  <textarea value={gestionMotivo} onChange={e => setGMotivo(e.target.value)} rows={2}
+                    placeholder="Ej: cubrimiento por incapacidad, ajuste de programación…"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs resize-none focus:outline-none focus:ring-2 focus:ring-primary-500"/>
+                </div>
 
-            <div className="flex gap-3">
-              <button onClick={() => setGModal(null)}
-                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50">
-                Cancelar
-              </button>
-              <button onClick={handleIntercambioDirecto} disabled={gestionGuardando}
-                className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
-                <ArrowLeftRight className="w-4 h-4"/>
-                {gestionGuardando ? 'Aplicando…' : 'Confirmar intercambio'}
-              </button>
-            </div>
+                {gestionProgreso !== null && (
+                  <div className="space-y-1.5">
+                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div
+                        className="h-full bg-primary-500 rounded-full transition-all duration-300"
+                        style={{ width: `${gestionProgreso}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 text-center">
+                      {gestionProgreso < 40
+                        ? 'Guardando en base de datos…'
+                        : gestionProgreso < 85
+                        ? 'Sincronizando con Google Sheet…'
+                        : 'Actualizando vista…'
+                      } {gestionProgreso}%
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex gap-3">
+                  <button onClick={() => setGModal(null)} disabled={gestionGuardando}
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium hover:bg-gray-50 disabled:opacity-40">
+                    Cancelar
+                  </button>
+                  <button onClick={handleIntercambioDirecto} disabled={gestionGuardando}
+                    className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                    <ArrowLeftRight className="w-4 h-4"/>
+                    {gestionGuardando ? 'Aplicando…' : 'Confirmar intercambio'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
