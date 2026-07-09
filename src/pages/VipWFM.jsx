@@ -725,6 +725,24 @@ const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto'
 const DIA_PILLS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom']
 const PILL_TO_DOW = [1, 2, 3, 4, 5, 6, 0]
 
+// AHT por línea (minutos). Clave = fragmento del nombre en minúsculas.
+const AHT_POR_LINEA = [
+  { patron: 'nivel 2',    aht: 121 },
+  { patron: 'nivel 1',    aht: 41  },
+  { patron: 'retencion',  aht: 52  },
+  { patron: 'retención',  aht: 52  },
+  { patron: 'soporte tv', aht: 34  },
+  { patron: 'sara',       aht: 27  },
+  { patron: 'sac',        aht: 30  },
+]
+
+function getAHTDefault(linea) {
+  if (!linea) return 20
+  const lower = linea.toLowerCase()
+  const match = AHT_POR_LINEA.find(r => lower.includes(r.patron))
+  return match ? match.aht : 20
+}
+
 export default function VipWFM() {
   const { profile } = useAuth()
   const role = profile?.role ?? ''
@@ -736,6 +754,7 @@ export default function VipWFM() {
   const [loading, setLoading] = useState(true)
   const [objetivo, setObjetivo] = useState(4)
   const [aht, setAht] = useState(20)
+  const [ahtManual, setAhtManual] = useState(false)
   const [showConfig, setShowConfig] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
@@ -750,6 +769,11 @@ export default function VipWFM() {
   const lunes = useMemo(() => getLunes(offset), [offset])
   const inicio = useMemo(() => toISO(lunes), [lunes])
   const fin = useMemo(() => toISO(addDays(lunes, 6)), [lunes])
+
+  // Actualizar AHT automáticamente al cambiar línea (solo si no fue editado manualmente)
+  useEffect(() => {
+    if (!ahtManual) setAht(getAHTDefault(lineaFiltro))
+  }, [lineaFiltro])
 
   async function cargarWFM() {
     const data = await getWFMInteracciones()
@@ -904,11 +928,21 @@ export default function VipWFM() {
           <span className="text-xs text-indigo-500 mr-4">Para calcular agentes recomendados</span>
           <label className="text-xs text-indigo-800 font-medium">AHT (min):</label>
           <input
-            type="number" min={1} max={120} value={aht}
-            onChange={e => setAht(Math.max(1, Number(e.target.value)))}
+            type="number" min={1} max={240} value={aht}
+            onChange={e => { setAht(Math.max(1, Number(e.target.value))); setAhtManual(true) }}
             className="w-16 text-xs border border-indigo-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
-          <span className="text-xs text-indigo-500">Tiempo promedio de atención · Para calcular SL estimado (Erlang C)</span>
+          {ahtManual && (
+            <button
+              onClick={() => { setAht(getAHTDefault(lineaFiltro)); setAhtManual(false) }}
+              className="text-xs text-indigo-500 hover:text-indigo-700 underline"
+            >
+              Restaurar automático
+            </button>
+          )}
+          <span className="text-xs text-indigo-500">
+            {ahtManual ? 'Valor manual' : `Automático según línea seleccionada`} · Para calcular SL estimado (Erlang C)
+          </span>
         </div>
       )}
 
