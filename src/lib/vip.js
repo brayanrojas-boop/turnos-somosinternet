@@ -1504,3 +1504,66 @@ export async function getRotacionTrasnocho(linea) {
 
   return { analistas, historial, siguiente: historial[0]?.agente || null }
 }
+
+// ── Pausas / breaks ──────────────────────────────────────────────────────────
+
+function _hoyISO() {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
+export async function iniciarPausa(agente, tipo, duracionProg = null) {
+  const { data, error } = await supabase
+    .from('vip_pausas')
+    .insert({ agente, tipo, duracion_prog: duracionProg })
+    .select()
+    .single()
+  if (error) throw new Error(error.message)
+  return data
+}
+
+export async function terminarPausa(id) {
+  const { data: pausa } = await supabase
+    .from('vip_pausas').select('inicio_real, duracion_prog').eq('id', id).single()
+  if (!pausa) throw new Error('Pausa no encontrada')
+  const durReal = Math.round((Date.now() - new Date(pausa.inicio_real).getTime()) / 60000)
+  const excedido = pausa.duracion_prog != null ? durReal - pausa.duracion_prog : null
+  const { error } = await supabase.from('vip_pausas').update({
+    fin_real: new Date().toISOString(),
+    duracion_real: durReal,
+    excedido_min: excedido,
+  }).eq('id', id)
+  if (error) throw new Error(error.message)
+  return { durReal, excedido }
+}
+
+export async function getPausaActiva(agente) {
+  const { data } = await supabase
+    .from('vip_pausas')
+    .select('*')
+    .eq('agente', agente)
+    .is('fin_real', null)
+    .order('inicio_real', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  return data
+}
+
+export async function getPausasHoy(agente) {
+  const { data } = await supabase
+    .from('vip_pausas')
+    .select('*')
+    .eq('agente', agente)
+    .eq('fecha', _hoyISO())
+    .order('inicio_real')
+  return data ?? []
+}
+
+export async function getPausasHoyTodos() {
+  const { data } = await supabase
+    .from('vip_pausas')
+    .select('*')
+    .eq('fecha', _hoyISO())
+    .order('agente, inicio_real')
+  return data ?? []
+}

@@ -13,11 +13,13 @@ import {
   reportarHorasExtra, getMisHorasExtra,
   actualizarTurnoProgramado, crearTurnoProgramado,
   sincronizarTurnoEnSheet,
+  iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy,
 } from '../lib/vip'
 import {
   Calendar, ArrowLeftRight, CheckCircle, XCircle, AlertTriangle,
   RefreshCw, Settings, X, ChevronLeft, ChevronRight, User, Search,
   Home, Building2, Heart, Download, Moon, PlusCircle, Clock, Pencil,
+  Coffee, Play, Square,
 } from 'lucide-react'
 
 const SCRIPT_URL_KEY    = 'vip_script_url'
@@ -821,6 +823,163 @@ function calPx(ini, fin) {
   if (!i || !f) return 0
   if (f <= i) f += 24
   return (f - i) * CAL_PX_H
+}
+
+// ── Widget de pausas/breaks ──────────────────────────────────────────────────
+function PausaWidget({ turnoHoy, nombreEfectivo }) {
+  const [pausaActiva, setPausaActiva] = useState(null)
+  const [pausasHoy,   setPausasHoy]   = useState([])
+  const [elapsed,     setElapsed]     = useState(0)
+  const [loading,     setLoading]     = useState(false)
+  const [iniciando,   setIniciando]   = useState(null)
+
+  function toMin(t) {
+    if (!t) return null
+    const [h, m] = String(t).split(':').map(Number)
+    return h * 60 + m
+  }
+
+  async function cargar() {
+    try {
+      const [activa, hoy] = await Promise.all([
+        getPausaActiva(nombreEfectivo),
+        getPausasHoy(nombreEfectivo),
+      ])
+      setPausaActiva(activa)
+      setPausasHoy(hoy)
+    } catch {}
+  }
+
+  useEffect(() => { if (nombreEfectivo) cargar() }, [nombreEfectivo])
+
+  // Contador en vivo mientras hay pausa activa
+  useEffect(() => {
+    if (!pausaActiva) { setElapsed(0); return }
+    const tick = () => setElapsed(Math.floor((Date.now() - new Date(pausaActiva.inicio_real).getTime()) / 1000))
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [pausaActiva])
+
+  async function handleIniciar(tipo) {
+    setIniciando(tipo)
+    try {
+      const iniMin = tipo === 'break' ? toMin(turnoHoy?.break_inicio) : toMin(turnoHoy?.lunch_inicio)
+      const finMin = tipo === 'break' ? toMin(turnoHoy?.break_fin)   : toMin(turnoHoy?.lunch_fin)
+      const durProg = (iniMin && finMin) ? finMin - iniMin : null
+      await iniciarPausa(nombreEfectivo, tipo, durProg)
+      await cargar()
+    } catch (e) { alert(e.message) }
+    setIniciando(null)
+  }
+
+  async function handleTerminar() {
+    if (!pausaActiva) return
+    setLoading(true)
+    try {
+      await terminarPausa(pausaActiva.id)
+      await cargar()
+    } catch (e) { alert(e.message) }
+    setLoading(false)
+  }
+
+  function fmtSec(s) {
+    const m = Math.floor(s / 60), ss = s % 60
+    return `${String(m).padStart(2,'0')}:${String(ss).padStart(2,'0')}`
+  }
+  function fmtHm(iso) {
+    return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+  }
+
+  const pausada = Boolean(pausaActiva)
+  const progSeg = pausaActiva?.duracion_prog ? pausaActiva.duracion_prog * 60 : null
+  const sobrepasado = progSeg && elapsed > progSeg
+
+  const pausasTerminadas = pausasHoy.filter(p => p.fin_real)
+
+  return (
+    <div className={`rounded-xl border p-4 ${pausada ? (sobrepasado ? 'border-red-300 bg-red-50' : 'border-orange-300 bg-orange-50') : 'border-gray-200 bg-white'}`}>
+      {/* Cabecera */}
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide flex items-center gap-1.5">
+          <Coffee className="w-3.5 h-3.5" /> Pausas
+        </p>
+        {turnoHoy && (
+          <div className="flex flex-wrap gap-3 text-xs text-gray-400">
+            {turnoHoy.break_inicio  && <span>Pausa: {formatH(turnoHoy.break_inicio)}–{formatH(turnoHoy.break_fin)}</span>}
+            {turnoHoy.lunch_inicio  && <span>Almuerzo: {formatH(turnoHoy.lunch_inicio)}–{formatH(turnoHoy.lunch_fin)}</span>}
+          </div>
+        )}
+      </div>
+
+      {pausada ? (
+        /* Pausa activa */
+        <div className="flex items-center gap-4">
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-orange-800">
+              {pausaActiva.tipo === 'break' ? '☕ En pausa' : '🍽️ En almuerzo'}
+            </p>
+            <div className="flex items-center gap-2 mt-1">
+              <span className={`text-2xl font-mono font-bold tabular-nums ${sobrepasado ? 'text-red-600 animate-pulse' : 'text-gray-800'}`}>
+                {fmtSec(elapsed)}
+              </span>
+              {pausaActiva.duracion_prog && (
+                <span className="text-xs text-gray-500">
+                  / {pausaActiva.duracion_prog} min programados
+                  {sobrepasado && ` (+${Math.floor((elapsed - progSeg) / 60)} min extra)`}
+                </span>
+              )}
+            </div>
+            {progSeg && (
+              <div className="mt-2 w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${sobrepasado ? 'bg-red-500' : 'bg-orange-400'}`}
+                  style={{ width: `${Math.min((elapsed / progSeg) * 100, 100)}%` }}
+                />
+              </div>
+            )}
+          </div>
+          <button onClick={handleTerminar} disabled={loading}
+            className="flex items-center gap-1.5 px-4 py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50 transition shrink-0">
+            <Square className="w-4 h-4" /> Terminar
+          </button>
+        </div>
+      ) : (
+        /* Sin pausa activa */
+        <div className="flex gap-2 flex-wrap">
+          <button onClick={() => handleIniciar('break')} disabled={iniciando != null}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl disabled:opacity-50 transition">
+            {iniciando === 'break' ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Play className="w-4 h-4" />}
+            Iniciar pausa
+          </button>
+          <button onClick={() => handleIniciar('almuerzo')} disabled={iniciando != null}
+            className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl disabled:opacity-50 transition">
+            {iniciando === 'almuerzo' ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Play className="w-4 h-4" />}
+            Iniciar almuerzo
+          </button>
+        </div>
+      )}
+
+      {/* Historial del día */}
+      {pausasTerminadas.length > 0 && (
+        <div className="mt-3 pt-3 border-t border-gray-200 space-y-1.5">
+          <p className="text-xs text-gray-400 font-medium">Hoy</p>
+          {pausasTerminadas.map(p => (
+            <div key={p.id} className="flex items-center gap-2 text-xs">
+              <span>{p.tipo === 'break' ? '☕' : '🍽️'}</span>
+              <span className="text-gray-500">{fmtHm(p.inicio_real)} – {fmtHm(p.fin_real)}</span>
+              <span className="font-semibold text-gray-700">{p.duracion_real} min</span>
+              {p.excedido_min != null && (
+                <span className={`px-1.5 py-0.5 rounded font-semibold ${p.excedido_min > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
+                  {p.excedido_min > 0 ? `+${p.excedido_min}m` : `${p.excedido_min}m`}
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }
 
 function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, onCambiar, onDescanso }) {
@@ -2171,6 +2330,13 @@ export default function VipMisTurnos() {
                     <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-xs text-amber-800">
                       No hay turnos programados esta semana en el sistema. Sincroniza el Sheet o usa Gestión directa para agregar turnos.
                     </div>
+                  )}
+                  {/* Widget de pausas — solo muestra en día de hoy */}
+                  {(vistaMode === 'dia' ? diaActivo === hoyStr : diasSemana.includes(hoyStr)) && !esAdmin && (
+                    <PausaWidget
+                      turnoHoy={misTurnosSemana.find(t => t.fecha === hoyStr)}
+                      nombreEfectivo={nombreEfectivo}
+                    />
                   )}
                   <CalendarioSemana
                     diasSemana={vistaMode === 'dia' ? [diaActivo] : diasSemana}
