@@ -14,6 +14,7 @@ import {
   actualizarTurnoProgramado, crearTurnoProgramado,
   sincronizarTurnoEnSheet,
   iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy, getPausasHoyTodos,
+  registrarSlackIdAutomatico,
 } from '../lib/vip'
 import {
   Calendar, ArrowLeftRight, CheckCircle, XCircle, AlertTriangle,
@@ -1977,7 +1978,7 @@ function BreaksMonitor() {
 
 // ── Página principal ──────────────────────────────────────────────────────────
 export default function VipMisTurnos() {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const { t } = useTranslation()
   const esAdmin = ['admin','supervisor'].includes(profile?.role)
 
@@ -2058,6 +2059,13 @@ export default function VipMisTurnos() {
   }, [profile?.id])
 
   const nombreEfectivo = nombreTurno.trim() || profile?.nombre_turno || profile?.full_name || ''
+
+  // Registra el Slack ID automáticamente la primera vez que el analista entra
+  useEffect(() => {
+    if (nombreEfectivo && user?.email) {
+      registrarSlackIdAutomatico(nombreEfectivo, user.email).catch(() => {})
+    }
+  }, [nombreEfectivo, user?.email])
 
   // Vista semana / día
   const [vistaMode, setVistaMode] = useState('semana')

@@ -1567,3 +1567,33 @@ export async function getPausasHoyTodos() {
     .order('agente, inicio_real')
   return data ?? []
 }
+
+// Registra el Slack ID del analista automáticamente usando su email de login.
+// Solo llama a la API de Slack si aún no hay registro para ese nombre.
+export async function registrarSlackIdAutomatico(nombre, email) {
+  if (!nombre || !email) return
+  const token = import.meta.env.VITE_SLACK_BOT_TOKEN
+  if (!token) return
+
+  // Verificar si ya está registrado
+  const { data: existing } = await supabase
+    .from('vip_slack_usuarios')
+    .select('slack_id')
+    .eq('nombre', nombre)
+    .maybeSingle()
+  if (existing?.slack_id) return
+
+  try {
+    const res = await fetch(
+      `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    const json = await res.json()
+    if (!json.ok || !json.user?.id) return
+    await supabase
+      .from('vip_slack_usuarios')
+      .upsert({ nombre, slack_id: json.user.id }, { onConflict: 'nombre' })
+  } catch {
+    // silencioso — no bloquea la app
+  }
+}
