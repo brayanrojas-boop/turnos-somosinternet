@@ -428,7 +428,7 @@ function BarChart({ data, recomendado }) {
 }
 
 // ── SLChart ───────────────────────────────────────────────────────────────────
-function SLChart({ slData, aht }) {
+function SLChart({ slData, aht, simultaneidad = 5 }) {
   const HORAS = Array.from({ length: 18 }, (_, i) => i + 6)
   const vals = slData.filter(v => v !== null)
   if (!vals.length) return null
@@ -450,7 +450,7 @@ function SLChart({ slData, aht }) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
         <div>
           <span className="text-xs font-semibold text-gray-700">Service Level estimado</span>
-          <span className="text-[10px] text-gray-400 ml-2">Erlang C · AHT {aht} min · 5 casos/analista · meta ≤5 min</span>
+          <span className="text-[10px] text-gray-400 ml-2">Erlang C · AHT {aht} min · {simultaneidad} casos/analista · meta ≤5 min</span>
         </div>
         <div className="flex gap-3 text-xs">
           <span className={`font-bold ${minSL >= 0.9 ? 'text-green-600' : minSL >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
@@ -755,6 +755,7 @@ export default function VipWFM() {
   const [objetivo, setObjetivo] = useState(4)
   const [aht, setAht] = useState(20)
   const [ahtManual, setAhtManual] = useState(false)
+  const [simultaneidad, setSimultaneidad] = useState(5)
   const [showConfig, setShowConfig] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
@@ -845,9 +846,9 @@ export default function VipWFM() {
       const demand = (heatmap.byDowHour[dow]?.[h] || 0) / heatmap.weekCount
       if (!hasWFMData) return null
       if (demand <= 0) return agents > 0 ? 1.0 : null
-      return calcSLHora(agents, demand, aht, 5, 5)
+      return calcSLHora(agents, demand, aht, 5, simultaneidad)
     })
-  }, [lunes, diaIdx, cobertura, heatmap, aht, hasWFMData])
+  }, [lunes, diaIdx, cobertura, heatmap, aht, simultaneidad, hasWFMData])
 
   const mesLabel = useMemo(
     () => MESES[lunes.getMonth()] + ' ' + lunes.getFullYear(),
@@ -926,6 +927,13 @@ export default function VipWFM() {
             className="w-16 text-xs border border-indigo-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
           />
           <span className="text-xs text-indigo-500 mr-4">Para calcular agentes recomendados</span>
+          <label className="text-xs text-indigo-800 font-medium">Casos simultáneos/analista:</label>
+          <input
+            type="number" min={1} max={20} value={simultaneidad}
+            onChange={e => setSimultaneidad(Math.max(1, Number(e.target.value)))}
+            className="w-16 text-xs border border-indigo-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
+          />
+          <span className="text-xs text-indigo-500 mr-4">Para calcular capacidad total en Erlang C</span>
           <label className="text-xs text-indigo-800 font-medium">AHT (min):</label>
           <input
             type="number" min={1} max={240} value={aht}
@@ -1021,7 +1029,7 @@ export default function VipWFM() {
                 Recomendado
               </span>
             </div>
-            <SLChart slData={slData} aht={aht} />
+            <SLChart slData={slData} aht={aht} simultaneidad={simultaneidad} />
           </>
         )}
       </div>
