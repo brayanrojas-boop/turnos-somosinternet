@@ -349,14 +349,9 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
 }
 
 // ── BarChart ──────────────────────────────────────────────────────────────────
-function BarChart({ data, recomendado, slData = [] }) {
+function BarChart({ data, recomendado }) {
   const max = Math.max(...data.map(d => d.count), recomendado, 1)
   const HORAS = Array.from({ length: 18 }, (_, i) => i + 6)
-  const hasSL = slData.some(v => v !== null)
-
-  const slPoints = slData
-    .map((sl, i) => sl !== null ? `${((i + 0.5) / 18) * 100},${(1 - sl) * 100}` : null)
-    .filter(Boolean)
 
   return (
     <div className="flex gap-2 items-stretch">
@@ -416,38 +411,6 @@ function BarChart({ data, recomendado, slData = [] }) {
               )
             })}
           </div>
-          {/* Overlay SL — línea Erlang C */}
-          {hasSL && (
-            <svg
-              viewBox="0 0 100 100"
-              preserveAspectRatio="none"
-              className="absolute inset-0 w-full h-full pointer-events-none z-20"
-            >
-              {/* Objetivo 90% — línea roja punteada */}
-              <line x1="0" y1="10" x2="100" y2="10"
-                stroke="#ef4444" strokeWidth="0.9" strokeDasharray="2.5,2" opacity="0.75" />
-              {/* Curva SL */}
-              {slPoints.length > 1 && (
-                <polyline
-                  points={slPoints.join(' ')}
-                  fill="none" stroke="#6366f1" strokeWidth="1.6"
-                  strokeLinejoin="round" strokeLinecap="round"
-                />
-              )}
-              {/* Puntos por hora */}
-              {slData.map((sl, i) => sl !== null ? (
-                <circle
-                  key={i}
-                  cx={((i + 0.5) / 18) * 100}
-                  cy={(1 - sl) * 100}
-                  r="1.6"
-                  fill={sl >= 0.9 ? '#22c55e' : sl >= 0.5 ? '#f59e0b' : '#ef4444'}
-                >
-                  <title>{`${i + 6}:00 — SL estimado: ${Math.round(sl * 100)}%`}</title>
-                </circle>
-              ) : null)}
-            </svg>
-          )}
         </div>
         {/* Eje X: horas */}
         <div className="flex gap-px">
@@ -460,25 +423,111 @@ function BarChart({ data, recomendado, slData = [] }) {
           Hora del día →
         </div>
       </div>
-      {/* Eje Y derecho: SL% */}
-      {hasSL && (
-        <div className="flex gap-0.5 items-stretch pb-5 shrink-0">
-          <div className="relative flex flex-col justify-between items-start" style={{ width: '26px' }}>
-            <span className="text-[8px] text-gray-400 leading-none">100%</span>
-            <span
-              className="absolute text-[8px] text-red-400 leading-none font-medium"
-              style={{ top: '10%', transform: 'translateY(-50%)' }}
-            >90%</span>
-            <span className="text-[8px] text-gray-400 leading-none">0%</span>
-          </div>
-          <div className="flex items-center justify-center" style={{ width: '12px' }}>
-            <span
-              className="text-[8px] text-indigo-400 font-medium tracking-widest select-none"
-              style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
-            >SL</span>
+    </div>
+  )
+}
+
+// ── SLChart ───────────────────────────────────────────────────────────────────
+function SLChart({ slData, aht }) {
+  const HORAS = Array.from({ length: 18 }, (_, i) => i + 6)
+  const vals = slData.filter(v => v !== null)
+  if (!vals.length) return null
+
+  const minSL  = Math.min(...vals)
+  const avgSL  = vals.reduce((a, b) => a + b, 0) / vals.length
+  const below90 = vals.filter(v => v < 0.9).length
+
+  // Path SVG en viewBox 0 0 180 100 (18 slots × 10 unidades de ancho)
+  const pts = slData
+    .map((sl, i) => sl !== null ? [(i + 0.5) * 10, (1 - sl) * 100] : null)
+  const validPts = pts.filter(Boolean)
+  const linePath  = validPts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x} ${y}`).join(' ')
+  const areaPath  = `${linePath} L${validPts[validPts.length - 1][0]} 100 L${validPts[0][0]} 100 Z`
+
+  return (
+    <div className="mt-5 pt-4 border-t border-gray-100">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 mb-3">
+        <div>
+          <span className="text-xs font-semibold text-gray-700">Service Level estimado</span>
+          <span className="text-[10px] text-gray-400 ml-2">Erlang C · AHT {aht} min · 5 casos/analista · meta ≤5 min</span>
+        </div>
+        <div className="flex gap-3 text-xs">
+          <span className={`font-bold ${minSL >= 0.9 ? 'text-green-600' : minSL >= 0.5 ? 'text-amber-600' : 'text-red-600'}`}>
+            Mín {Math.round(minSL * 100)}%
+          </span>
+          <span className="text-gray-500">Prom {Math.round(avgSL * 100)}%</span>
+          {below90 > 0 && (
+            <span className="text-red-500 font-medium">{below90}h por debajo de 90%</span>
+          )}
+          {below90 === 0 && (
+            <span className="text-green-600 font-medium">Cumple objetivo todas las horas</span>
+          )}
+        </div>
+      </div>
+
+      {/* Gráfica */}
+      <div className="flex gap-2">
+        {/* Eje Y */}
+        <div className="flex flex-col shrink-0 pb-9" style={{ width: '26px' }}>
+          <div className="flex-1 flex flex-col justify-between items-end text-[8px]">
+            <span className="text-gray-400 leading-none">100%</span>
+            <span className="text-red-400 font-medium leading-none">90%</span>
+            <span className="text-amber-500 leading-none">50%</span>
+            <span className="text-gray-400 leading-none">0%</span>
           </div>
         </div>
-      )}
+        <div className="flex-1 min-w-0">
+          {/* SVG línea de tendencia */}
+          <svg
+            viewBox="0 0 180 100"
+            preserveAspectRatio="none"
+            className="w-full h-20 block"
+          >
+            {/* Zonas de color */}
+            <rect x="0" y="0"   width="180" height="10"  fill="#dcfce7" opacity="0.55" />
+            <rect x="0" y="10"  width="180" height="40"  fill="#fef9c3" opacity="0.45" />
+            <rect x="0" y="50"  width="180" height="50"  fill="#fee2e2" opacity="0.45" />
+            {/* Líneas de referencia */}
+            <line x1="0" y1="10" x2="180" y2="10" stroke="#ef4444" strokeWidth="0.6"
+              strokeDasharray="2,1.5" vectorEffect="non-scaling-stroke" />
+            <line x1="0" y1="50" x2="180" y2="50" stroke="#f59e0b" strokeWidth="0.4"
+              strokeDasharray="2,2" vectorEffect="non-scaling-stroke" opacity="0.6" />
+            {/* Área rellena */}
+            <path d={areaPath} fill="#6366f1" opacity="0.08" />
+            {/* Línea SL */}
+            <path d={linePath} fill="none" stroke="#6366f1" strokeWidth="1.4"
+              strokeLinejoin="round" strokeLinecap="round"
+              vectorEffect="non-scaling-stroke" />
+          </svg>
+          {/* Eje X horas */}
+          <div className="flex gap-px mt-0.5">
+            {HORAS.map(h => (
+              <div key={h} className="flex-1 text-center text-[9px] text-gray-400 leading-none">{h}</div>
+            ))}
+          </div>
+          {/* Valores SL por hora */}
+          <div className="flex gap-px mt-1.5">
+            {slData.map((sl, i) => {
+              if (sl === null) return <div key={i} className="flex-1" />
+              const pct = Math.round(sl * 100)
+              const [bg, text] = sl >= 0.9
+                ? ['bg-green-100', 'text-green-700']
+                : sl >= 0.5
+                ? ['bg-amber-100', 'text-amber-700']
+                : ['bg-red-100', 'text-red-600']
+              return (
+                <div key={i}
+                  className={`flex-1 py-1 ${bg} rounded-sm text-center text-[8px] font-bold leading-none ${text}`}
+                  title={`${HORAS[i]}:00 — SL: ${pct}%`}
+                >
+                  {pct}%
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
@@ -928,7 +977,7 @@ export default function VipWFM() {
           <div className="h-36 animate-pulse bg-gray-50 rounded-lg" />
         ) : (
           <>
-            <BarChart data={barData} recomendado={recomendadoDia} slData={slData} />
+            <BarChart data={barData} recomendado={recomendadoDia} />
             <div className="flex gap-4 mt-3 flex-wrap">
               <LegendItem color="bg-green-500" label={`≥ recomendado (${recomendadoDia} ag.)`} />
               <LegendItem color="bg-amber-400" label="50–99%" />
@@ -937,19 +986,8 @@ export default function VipWFM() {
                 <span className="inline-block w-6 border-t-2 border-dashed border-indigo-400" />
                 Recomendado
               </span>
-              {slData.some(v => v !== null) && (
-                <>
-                  <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                    <span className="inline-block w-6 border-t-2 border-indigo-500" />
-                    SL estimado
-                  </span>
-                  <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                    <span className="inline-block w-6 border-t border-dashed border-red-400" />
-                    Objetivo 90%
-                  </span>
-                </>
-              )}
             </div>
+            <SLChart slData={slData} aht={aht} />
           </>
         )}
       </div>
