@@ -111,18 +111,6 @@ export function AuthProvider({ children }) {
       throw new Error(`Solo se permiten cuentas @${DOMINIO}.`)
     }
 
-    // 3. Verificar que el email esté en vip_empleados (ilike = case-insensitive)
-    const { data: empleado } = await supabase
-      .from('vip_empleados')
-      .select('nombre_completo')
-      .ilike('email', email)
-      .maybeSingle()
-
-    if (!empleado) {
-      await auth.signOut()
-      throw new Error('Tu correo no está en la lista de empleados autorizados. Contacta a tu administrador.')
-    }
-
     // 4. Vincular con Supabase usando UID de Firebase como contraseña determinista
     const sbPassword = `GGL_${fbUser.uid}`
 
