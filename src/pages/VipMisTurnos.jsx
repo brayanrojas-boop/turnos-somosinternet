@@ -13,7 +13,7 @@ import {
   reportarHorasExtra, getMisHorasExtra,
   actualizarTurnoProgramado, crearTurnoProgramado,
   sincronizarTurnoEnSheet,
-  iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy,
+  iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy, getPausasHoyTodos,
 } from '../lib/vip'
 import {
   Calendar, ArrowLeftRight, CheckCircle, XCircle, AlertTriangle,
@@ -1599,26 +1599,35 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
 
 // ── Monitor de breaks del día ─────────────────────────────────────────────────
 function BreaksMonitor() {
-  function getNow() { const n = new Date(); return n.getHours() + n.getMinutes() / 60 }
+  function getNow()    { const n = new Date(); return n.getHours() + n.getMinutes() / 60 }
   function getNowStr() { const n = new Date(); return `${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}` }
 
-  const [now, setNow]             = useState(getNow)
-  const [nowStr, setNowStr]       = useState(getNowStr)
-  const [turnos, setTurnos]       = useState([])
-  const [loading, setLoading]     = useState(true)
-  const [filtroLinea, setFL]      = useState('')
+  const [now, setNow]         = useState(getNow)
+  const [nowStr, setNowStr]   = useState(getNowStr)
+  const [tick, setTick]       = useState(0)
+  const [turnos, setTurnos]   = useState([])
+  const [pausas, setPausas]   = useState([])
+  const [loading, setLoading] = useState(true)
+  const [filtroLinea, setFL]  = useState('')
+  const [vistaTab, setVT]     = useState('horario')  // 'horario' | 'reales'
 
   useEffect(() => {
     cargar()
-    const id = setInterval(() => { setNow(getNow()); setNowStr(getNowStr()) }, 30_000)
+    const id = setInterval(() => {
+      setNow(getNow()); setNowStr(getNowStr()); setTick(t => t + 1)
+    }, 10_000)
     return () => clearInterval(id)
   }, [])
 
   async function cargar() {
     setLoading(true)
     const hoy = localDateISO()
-    const data = await getTurnosSemana(hoy, hoy)
+    const [data, pData] = await Promise.all([
+      getTurnosSemana(hoy, hoy),
+      getPausasHoyTodos(),
+    ])
     setTurnos(data ?? [])
+    setPausas(pData ?? [])
     setLoading(false)
   }
 
@@ -1638,6 +1647,9 @@ function BreaksMonitor() {
     else if (time.includes(' ')) time = time.split(' ')[1]
     return time.slice(0, 5)
   }
+  function fmtHM(iso) {
+    return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
+  }
   function fmtMin(min) {
     if (min < 1) return 'ahora mismo'
     if (min < 60) return `en ${Math.round(min)} min`
@@ -1645,6 +1657,7 @@ function BreaksMonitor() {
     return m > 0 ? `en ${h}h ${m}min` : `en ${h}h`
   }
 
+  // ── Datos de horario programado ──────────────────────────────────────────────
   const activos = turnos.filter(t => !esDescanso(t))
   const lineas  = [...new Set(activos.map(t => t.linea_atencion).filter(Boolean))].sort()
   const base    = filtroLinea ? activos.filter(t => t.linea_atencion === filtroLinea) : activos
@@ -1664,25 +1677,58 @@ function BreaksMonitor() {
     }
   }
 
-  const enCurso   = eventos.filter(e => now >= e.ini && now <= e.fin).sort((a,b) => a.fin - b.fin)
-  const proximos  = eventos.filter(e => now < e.ini && (e.ini - now) * 60 <= 90).sort((a,b) => a.ini - b.ini)
-  const masTarde  = eventos.filter(e => now < e.ini && (e.ini - now) * 60 > 90).sort((a,b) => a.ini - b.ini)
+  const enCurso  = eventos.filter(e => now >= e.ini && now <= e.fin).sort((a,b) => a.fin - b.fin)
+  const proximos = eventos.filter(e => now < e.ini && (e.ini - now) * 60 <= 90).sort((a,b) => a.ini - b.ini)
+  const masTarde = eventos.filter(e => now < e.ini && (e.ini - now) * 60 > 90).sort((a,b) => a.ini - b.ini)
+
+  // ── Datos de pausas reales ───────────────────────────────────────────────────
+  const activas    = pausas.filter(p => !p.fin_real)
+  const terminadas = pausas.filter(p => p.fin_real)
+
+  // Resumen por analista (terminadas)
+  const resumenMap = {}
+  for (const p of terminadas) {
+    if (!resumenMap[p.agente]) resumenMap[p.agente] = { agente: p.agente, totalMin: 0, excedidoMin: 0, pausas: 0, excesos: 0 }
+    const r = resumenMap[p.agente]
+    r.totalMin    += p.duracion_real ?? 0
+    r.excedidoMin += Math.max(0, p.excedido_min ?? 0)
+    r.pausas++
+    if ((p.excedido_min ?? 0) > 0) r.excesos++
+  }
+  const resumen = Object.values(resumenMap).sort((a, b) => b.excedidoMin - a.excedidoMin)
+
+  // ── Exportar CSV ─────────────────────────────────────────────────────────────
+  function exportarCSV() {
+    const hoy = localDateISO()
+    const rows = [['Analista','Tipo','Inicio','Fin','Duración (min)','Programado (min)','Excedido (min)']]
+    for (const p of terminadas) {
+      rows.push([
+        p.agente, p.tipo,
+        fmtHM(p.inicio_real),
+        fmtHM(p.fin_real),
+        p.duracion_real ?? '',
+        p.duracion_prog ?? '',
+        p.excedido_min ?? '',
+      ])
+    }
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n')
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
+    a.download = `pausas_${hoy}.csv`; a.click()
+  }
 
   const EventRow = ({ e, variante }) => {
     const minAway = e.ini > now ? (e.ini - now) * 60 : null
     const minLeft = e.fin  > now ? (e.fin  - now) * 60 : null
     const urgent  = variante === 'proximo' && minAway !== null && minAway <= 15
-
     const bg = variante === 'activo'
       ? (e.tipo === 'pausa' ? 'bg-amber-50 border-amber-200' : 'bg-teal-50 border-teal-200')
       : variante === 'proximo' && urgent ? 'bg-orange-50 border-orange-200'
       : variante === 'proximo' ? 'bg-white border-gray-200'
       : 'bg-gray-50/50 border-gray-100'
-
     const tipoBadge = e.tipo === 'pausa'
-      ? <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-amber-100 text-amber-700">☕ Break</span>
-      : <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[10px] font-semibold bg-teal-100 text-teal-700">🍽️ Almuerzo</span>
-
+      ? <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">☕ Break</span>
+      : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-100 text-teal-700">🍽️ Almuerzo</span>
     return (
       <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${bg}`}>
         <div className="flex-1 min-w-0">
@@ -1692,25 +1738,12 @@ function BreaksMonitor() {
             </p>
             {variante === 'tarde' ? <span className="opacity-50">{tipoBadge}</span> : tipoBadge}
           </div>
-          <p className="text-xs text-gray-500 font-medium">
-            {e.iniStr} – {e.finStr}
-            {e.linea ? <span className="text-gray-400 font-normal"> · {e.linea}</span> : null}
-          </p>
+          <p className="text-xs text-gray-500">{e.iniStr} – {e.finStr}{e.linea ? ` · ${e.linea}` : ''}</p>
         </div>
-        <div className="text-right shrink-0">
-          {variante === 'activo' && (
-            <p className="text-[11px] text-gray-400">
-              termina en {minLeft !== null ? Math.max(0, Math.round(minLeft)) : 0} min
-            </p>
-          )}
-          {variante === 'proximo' && (
-            <p className={`text-xs font-semibold ${urgent ? 'text-orange-600' : 'text-gray-500'}`}>
-              {fmtMin(minAway)}
-            </p>
-          )}
-          {variante === 'tarde' && (
-            <p className="text-xs text-gray-400">{fmtMin(minAway)}</p>
-          )}
+        <div className="text-right shrink-0 text-xs">
+          {variante === 'activo'  && <span className="text-gray-400">termina en {Math.max(0, Math.round(minLeft))} min</span>}
+          {variante === 'proximo' && <span className={urgent ? 'text-orange-600 font-semibold' : 'text-gray-500'}>{fmtMin(minAway)}</span>}
+          {variante === 'tarde'   && <span className="text-gray-400">{fmtMin(minAway)}</span>}
         </div>
       </div>
     )
@@ -1720,74 +1753,222 @@ function BreaksMonitor() {
     return <div className="flex items-center justify-center py-12 text-gray-400 text-sm">Cargando…</div>
 
   return (
-    <div className="space-y-5 p-1">
+    <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-gray-700">Breaks y almuerzos · hoy</p>
+          <p className="text-sm font-semibold text-gray-700">Monitor de breaks · {localDateISO()}</p>
           <p className="text-xs text-gray-400">Hora actual: <span className="font-mono font-semibold text-gray-600">{nowStr}</span></p>
         </div>
-        <button onClick={cargar}
-          className="text-xs text-primary-600 hover:bg-primary-50 px-2.5 py-1 rounded-lg flex items-center gap-1 transition">
-          <RefreshCw className="w-3 h-3"/> Actualizar
-        </button>
+        <div className="flex items-center gap-2">
+          {terminadas.length > 0 && (
+            <button onClick={exportarCSV}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-lg transition">
+              <Download className="w-3.5 h-3.5"/> Exportar CSV
+            </button>
+          )}
+          <button onClick={cargar}
+            className="text-xs text-primary-600 hover:bg-primary-50 px-2.5 py-1.5 rounded-lg flex items-center gap-1 transition">
+            <RefreshCw className="w-3 h-3"/> Actualizar
+          </button>
+        </div>
       </div>
 
-      {/* Filtro por línea */}
-      {lineas.length > 1 && (
-        <div className="flex flex-wrap gap-1.5">
-          <button onClick={() => setFL('')}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition ${!filtroLinea ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-            Todas las líneas
-          </button>
-          {lineas.map(l => (
-            <button key={l} onClick={() => setFL(l === filtroLinea ? '' : l)}
-              className={`px-3 py-1 rounded-full text-xs font-medium transition ${filtroLinea === l ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
-              {l}
-            </button>
+      {/* KPIs rápidos de pausas reales */}
+      {pausas.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+          {[
+            { label: 'En pausa ahora',  value: activas.length,                          color: activas.length > 0 ? 'border-orange-400' : 'border-gray-200', bold: activas.length > 0 },
+            { label: 'Pausas hoy',      value: terminadas.length,                       color: 'border-gray-200' },
+            { label: 'Analistas con exceso', value: resumen.filter(r => r.excedidoMin > 0).length, color: resumen.some(r => r.excedidoMin > 0) ? 'border-red-400' : 'border-gray-200' },
+            { label: 'Total excedido',  value: `${resumen.reduce((s,r) => s + r.excedidoMin, 0)} min`, color: 'border-gray-200' },
+          ].map(({ label, value, color, bold }) => (
+            <div key={label} className={`bg-white rounded-xl border-l-4 ${color} border border-gray-200 px-3 py-2.5`}>
+              <p className="text-xs text-gray-500">{label}</p>
+              <p className={`text-xl font-bold mt-0.5 ${bold ? 'text-orange-600' : 'text-gray-900'}`}>{value}</p>
+            </div>
           ))}
         </div>
       )}
 
-      {/* Ahora */}
-      {enCurso.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block"/>
-            Ahora · {enCurso.length} {enCurso.length === 1 ? 'persona' : 'personas'}
-          </p>
-          <div className="space-y-1.5">
-            {enCurso.map(e => <EventRow key={e.key} e={e} variante="activo" />)}
-          </div>
+      {/* Tabs horario vs reales */}
+      <div className="flex gap-1 border-b border-gray-200">
+        {[['horario','Horario programado'],['reales','Pausas reales']].map(([id, label]) => (
+          <button key={id} onClick={() => setVT(id)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition ${vistaTab === id ? 'border-primary-600 text-primary-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            {label}
+            {id === 'reales' && pausas.length > 0 && (
+              <span className="ml-1.5 bg-gray-200 text-gray-600 text-xs rounded-full px-1.5">{pausas.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Vista: Horario programado ── */}
+      {vistaTab === 'horario' && (
+        <div className="space-y-5">
+          {lineas.length > 1 && (
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={() => setFL('')} className={`px-3 py-1 rounded-full text-xs font-medium transition ${!filtroLinea ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>Todas</button>
+              {lineas.map(l => (
+                <button key={l} onClick={() => setFL(l === filtroLinea ? '' : l)}
+                  className={`px-3 py-1 rounded-full text-xs font-medium transition ${filtroLinea === l ? 'bg-primary-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}>
+                  {l}
+                </button>
+              ))}
+            </div>
+          )}
+          {enCurso.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse inline-block"/> Ahora · {enCurso.length}
+              </p>
+              <div className="space-y-1.5">{enCurso.map(e => <EventRow key={e.key} e={e} variante="activo" />)}</div>
+            </div>
+          )}
+          {proximos.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Próximos 90 min · {proximos.length}</p>
+              <div className="space-y-1.5">{proximos.map(e => <EventRow key={e.key} e={e} variante="proximo" />)}</div>
+            </div>
+          )}
+          {masTarde.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Más tarde</p>
+              <div className="space-y-1">{masTarde.map(e => <EventRow key={e.key} e={e} variante="tarde" />)}</div>
+            </div>
+          )}
+          {eventos.length === 0 && (
+            <div className="text-center py-10 text-gray-400">
+              <Clock className="w-8 h-8 mx-auto mb-2 opacity-30"/>
+              <p className="text-sm">No hay breaks ni almuerzos programados para hoy</p>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Próximos 90 min */}
-      {proximos.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-            Próximos 90 min · {proximos.length}
-          </p>
-          <div className="space-y-1.5">
-            {proximos.map(e => <EventRow key={e.key} e={e} variante="proximo" />)}
-          </div>
-        </div>
-      )}
+      {/* ── Vista: Pausas reales ── */}
+      {vistaTab === 'reales' && (
+        <div className="space-y-5">
+          {/* Pausas activas ahora */}
+          {activas.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2 flex items-center gap-1.5">
+                <span className="w-2 h-2 rounded-full bg-orange-500 animate-pulse inline-block"/> En pausa ahora · {activas.length}
+              </p>
+              <div className="space-y-2">
+                {activas.map(p => {
+                  const elapsed = Math.floor((Date.now() - new Date(p.inicio_real).getTime()) / 60000)
+                  const over    = p.duracion_prog ? elapsed - p.duracion_prog : null
+                  return (
+                    <div key={p.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${over > 0 ? 'bg-red-50 border-red-200' : 'bg-orange-50 border-orange-200'}`}>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-semibold text-gray-800">{p.agente?.split(' ').slice(0,2).join(' ')}</p>
+                          <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${p.tipo === 'break' ? 'bg-amber-100 text-amber-700' : 'bg-teal-100 text-teal-700'}`}>
+                            {p.tipo === 'break' ? '☕' : '🍽️'} {p.tipo}
+                          </span>
+                        </div>
+                        <p className="text-xs text-gray-500 mt-0.5">Inició: {fmtHM(p.inicio_real)}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className={`text-lg font-mono font-bold tabular-nums ${over > 0 ? 'text-red-600' : 'text-gray-700'}`}>{elapsed} min</p>
+                        {p.duracion_prog && (
+                          <p className="text-xs text-gray-400">/ {p.duracion_prog} min prog.</p>
+                        )}
+                        {over > 0 && (
+                          <p className="text-xs font-bold text-red-600">+{over} min extra</p>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
 
-      {/* Más tarde */}
-      {masTarde.length > 0 && (
-        <div>
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Más tarde</p>
-          <div className="space-y-1">
-            {masTarde.map(e => <EventRow key={e.key} e={e} variante="tarde" />)}
-          </div>
-        </div>
-      )}
+          {/* Resumen por analista */}
+          {resumen.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Resumen por analista</p>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      {['Analista','Pausas','Total (min)','Tiempo excedido','Estado'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {resumen.map(r => (
+                      <tr key={r.agente} className="hover:bg-gray-50">
+                        <td className="px-3 py-2.5 font-medium text-gray-800">{r.agente}</td>
+                        <td className="px-3 py-2.5 text-gray-500">{r.pausas}</td>
+                        <td className="px-3 py-2.5 text-gray-700">{r.totalMin} min</td>
+                        <td className="px-3 py-2.5">
+                          {r.excedidoMin > 0
+                            ? <span className="font-bold text-red-600">+{r.excedidoMin} min ({r.excesos} exceso{r.excesos !== 1 ? 's' : ''})</span>
+                            : <span className="text-green-600 font-medium">Sin excesos</span>
+                          }
+                        </td>
+                        <td className="px-3 py-2.5">
+                          {activas.some(a => a.agente === r.agente)
+                            ? <span className="inline-flex items-center gap-1 text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 bg-orange-500 rounded-full animate-pulse"/>En pausa</span>
+                            : <span className="text-xs text-gray-400">Disponible</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-      {eventos.length === 0 && (
-        <div className="text-center py-10 text-gray-400">
-          <Clock className="w-8 h-8 mx-auto mb-2 opacity-30"/>
-          <p className="text-sm">No hay breaks ni almuerzos programados para hoy</p>
+          {/* Historial detallado */}
+          {terminadas.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Historial del día</p>
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <table className="w-full text-xs">
+                  <thead className="bg-gray-50 border-b">
+                    <tr>
+                      {['Analista','Tipo','Inicio','Fin','Real','Prog.','Diferencia'].map(h => (
+                        <th key={h} className="px-3 py-2 text-left font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {terminadas.map(p => (
+                      <tr key={p.id} className={`hover:bg-gray-50 ${(p.excedido_min ?? 0) > 0 ? 'bg-red-50/40' : ''}`}>
+                        <td className="px-3 py-2 font-medium text-gray-800">{p.agente?.split(' ').slice(0,2).join(' ')}</td>
+                        <td className="px-3 py-2">{p.tipo === 'break' ? '☕ Break' : '🍽️ Almuerzo'}</td>
+                        <td className="px-3 py-2 font-mono text-gray-600">{fmtHM(p.inicio_real)}</td>
+                        <td className="px-3 py-2 font-mono text-gray-600">{fmtHM(p.fin_real)}</td>
+                        <td className="px-3 py-2 font-semibold">{p.duracion_real ?? '—'} min</td>
+                        <td className="px-3 py-2 text-gray-400">{p.duracion_prog ?? '—'} min</td>
+                        <td className="px-3 py-2">
+                          {p.excedido_min == null ? '—'
+                            : p.excedido_min > 0
+                              ? <span className="font-bold text-red-600">+{p.excedido_min} min</span>
+                              : <span className="text-green-600 font-medium">{p.excedido_min} min</span>
+                          }
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {pausas.length === 0 && (
+            <div className="text-center py-10 text-gray-400">
+              <Coffee className="w-8 h-8 mx-auto mb-2 opacity-30"/>
+              <p className="text-sm">Nadie ha marcado pausas hoy aún</p>
+            </div>
+          )}
         </div>
       )}
     </div>
