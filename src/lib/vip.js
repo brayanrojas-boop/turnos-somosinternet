@@ -352,6 +352,31 @@ export async function importarTurnosDesdeSheet(url) {
     insertados += Math.min(CHUNK, registros.length - i)
   }
 
+  // Re-aplicar intercambios aprobados que caigan en las fechas sincronizadas
+  // (el Sheet tiene datos originales, la sincronización los pisa — hay que re-aplicar)
+  const todasFechas = [...new Set([
+    ...fechas,
+    ...registros.map(r => r.fecha).filter(Boolean),
+  ])]
+  const { data: aprobados } = await supabase
+    .from('vip_cambios_turno')
+    .select('*')
+    .eq('estado', 'aprobado')
+    .or(`turno_sol_fecha.in.(${todasFechas.map(f => `"${f}"`).join(',')}),turno_rec_fecha.in.(${todasFechas.map(f => `"${f}"`).join(',')})`)
+
+  for (const cambio of (aprobados ?? [])) {
+    const [{ data: filasA }, { data: filasB }] = await Promise.all([
+      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
+      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
+    ])
+    if (filasA?.length && filasB?.length) {
+      await Promise.all([
+        ...filasA.map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
+        ...filasB.map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+      ])
+    }
+  }
+
   return insertados
 }
 
