@@ -349,8 +349,10 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
 }
 
 // ── BarChart ──────────────────────────────────────────────────────────────────
-function BarChart({ data }) {
-  const max = Math.max(...data.map(d => d.count), 1)
+function BarChart({ data, dataOriginal = null }) {
+  const isSim = dataOriginal !== null
+  const allCounts = [...data.map(d => d.count), ...(dataOriginal ? dataOriginal.map(d => d.count) : []), 1]
+  const max = Math.max(...allCounts)
   const HORAS = Array.from({ length: 18 }, (_, i) => i + 6)
 
   return (
@@ -381,16 +383,26 @@ function BarChart({ data }) {
           <div className="flex items-end gap-px h-full">
             {HORAS.map(h => {
               const cnt = data.find(d => d.hora === h)?.count || 0
+              const origCnt = dataOriginal?.find(d => d.hora === h)?.count ?? cnt
               const pct = cnt / max
+              const origPct = origCnt / max
               const barH = Math.max(pct * 100, cnt > 0 ? 4 : 0)
+              const origBarH = Math.max(origPct * 100, origCnt > 0 ? 2 : 0)
+              const changed = isSim && cnt !== origCnt
               return (
                 <div
                   key={h}
-                  className="flex-1 flex flex-col items-center justify-end h-full"
-                  title={`${h}:00 — ${cnt} agente${cnt !== 1 ? 's' : ''}`}
+                  className="flex-1 flex flex-col items-center justify-end h-full relative"
+                  title={`${h}:00 — ${cnt} agente${cnt !== 1 ? 's' : ''}${changed ? ` (antes: ${origCnt})` : ''}`}
                 >
+                  {isSim && (
+                    <div
+                      className="absolute bottom-0 w-full rounded-t bg-indigo-200/70"
+                      style={{ height: `${origBarH}%` }}
+                    />
+                  )}
                   <div
-                    className="w-full rounded-t transition-all relative bg-indigo-500"
+                    className={`w-full rounded-t transition-all relative z-10 ${isSim ? 'bg-amber-400' : 'bg-indigo-500'}`}
                     style={{ height: `${barH}%` }}
                   >
                     {cnt > 0 && barH >= 22 && (
@@ -751,6 +763,8 @@ export default function VipWFM() {
   const [showConfig, setShowConfig] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [showScheduler, setShowScheduler] = useState(false)
+  const [simMode, setSimMode] = useState(false)
+  const [turnosSim, setTurnosSim] = useState({})
 
   const todayPillIdx = (() => {
     const dow = new Date().getDay()
@@ -801,6 +815,17 @@ export default function VipWFM() {
   )
 
   const cobertura = useMemo(() => calcCobertura(turnos, lineaFiltro), [turnos, lineaFiltro])
+
+  const turnosSimEfectivos = useMemo(() => {
+    if (!simMode || Object.keys(turnosSim).length === 0) return turnos
+    return turnos.map(t => { const s = turnosSim[t.id]; return s ? { ...t, ...s } : t })
+  }, [turnos, turnosSim, simMode])
+
+  const coberturaEfectiva = useMemo(
+    () => simMode ? calcCobertura(turnosSimEfectivos, lineaFiltro) : cobertura,
+    [simMode, turnosSimEfectivos, lineaFiltro, cobertura]
+  )
+
   const heatmap   = useMemo(() => calcDemandaFromWFM(wfmData, lineaFiltro, lunes), [wfmData, lineaFiltro, lunes])
   const kpis      = useMemo(() => calcKPIs(lunes, cobertura), [lunes, cobertura])
   const gapRows   = useMemo(() => calcGapRows(lunes, cobertura, heatmap, objetivo), [lunes, cobertura, heatmap, objetivo])
@@ -809,9 +834,26 @@ export default function VipWFM() {
     const fecha = toISO(addDays(lunes, diaIdx))
     return Array.from({ length: 18 }, (_, i) => {
       const h = i + 6
+      return { hora: h, count: coberturaEfectiva[`${fecha}_${h}`] || 0 }
+    })
+  }, [lunes, diaIdx, coberturaEfectiva])
+
+  const barDataOriginal = useMemo(() => {
+    if (!simMode) return null
+    const fecha = toISO(addDays(lunes, diaIdx))
+    return Array.from({ length: 18 }, (_, i) => {
+      const h = i + 6
       return { hora: h, count: cobertura[`${fecha}_${h}`] || 0 }
     })
-  }, [lunes, diaIdx, cobertura])
+  }, [simMode, lunes, diaIdx, cobertura])
+
+  const turnosDia = useMemo(() => {
+    const fecha = toISO(addDays(lunes, diaIdx))
+    return turnos
+      .filter(t => t.fecha === fecha)
+      .filter(t => !lineaFiltro || t.linea_atencion?.toLowerCase() === lineaFiltro.toLowerCase())
+      .sort((a, b) => (a.turno_inicio || '').localeCompare(b.turno_inicio || ''))
+  }, [turnos, lunes, diaIdx, lineaFiltro])
 
   const recomendadoDia = useMemo(() => {
     const dow = PILL_TO_DOW[diaIdx]
@@ -834,13 +876,13 @@ export default function VipWFM() {
     const fecha = toISO(addDays(lunes, diaIdx))
     return Array.from({ length: 18 }, (_, i) => {
       const h = i + 6
-      const agents = cobertura[`${fecha}_${h}`] || 0
+      const agents = coberturaEfectiva[`${fecha}_${h}`] || 0
       const demand = (heatmap.byDowHour[dow]?.[h] || 0) / heatmap.weekCount
       if (!hasWFMData) return null
       if (demand <= 0) return agents > 0 ? 1.0 : null
       return calcSLHora(agents, demand, aht, 5, simultaneidad)
     })
-  }, [lunes, diaIdx, cobertura, heatmap, aht, simultaneidad, hasWFMData])
+  }, [lunes, diaIdx, coberturaEfectiva, heatmap, aht, simultaneidad, hasWFMData])
 
   const mesLabel = useMemo(
     () => MESES[lunes.getMonth()] + ' ' + lunes.getFullYear(),
@@ -988,26 +1030,99 @@ export default function VipWFM() {
             <h2 className="text-sm font-semibold text-gray-800">Cobertura de agentes</h2>
             <p className="text-xs text-gray-400 mt-0.5">Agentes en turno por hora — {lineaFiltro || 'todas las líneas'}</p>
           </div>
-          <div className="flex gap-1 flex-wrap">
-            {DIA_PILLS.map((label, i) => (
-              <button
-                key={i}
-                onClick={() => setDiaIdx(i)}
-                className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${diaIdx === i ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex gap-1 flex-wrap">
+              {DIA_PILLS.map((label, i) => (
+                <button
+                  key={i}
+                  onClick={() => setDiaIdx(i)}
+                  className={`px-2.5 py-1 rounded-full text-xs font-medium transition-colors ${diaIdx === i ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'}`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => { if (simMode) { setSimMode(false); setTurnosSim({}) } else setSimMode(true) }}
+              className={`px-3 py-1 rounded-full text-xs font-medium transition-colors border ${simMode ? 'bg-amber-100 border-amber-300 text-amber-700' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+            >
+              {simMode ? '✕ Salir simulación' : 'Simular'}
+            </button>
           </div>
         </div>
         {loading ? (
           <div className="h-36 animate-pulse bg-gray-50 rounded-lg" />
         ) : (
           <>
-            <BarChart data={barData} />
+            {simMode && (
+              <div className="flex items-center gap-2 mb-2">
+                <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">SIMULACIÓN</span>
+                <span className="text-[10px] text-gray-400">Edita los turnos abajo para ver el impacto en cobertura</span>
+              </div>
+            )}
+            <BarChart data={barData} dataOriginal={barDataOriginal} />
             <div className="flex gap-4 mt-3 flex-wrap">
-              <LegendItem color="bg-indigo-500" label="Agentes programados por hora" />
+              {simMode ? (
+                <>
+                  <LegendItem color="bg-amber-400" label="Cobertura simulada" />
+                  <LegendItem color="bg-indigo-200" label="Cobertura original" />
+                </>
+              ) : (
+                <LegendItem color="bg-indigo-500" label="Agentes programados por hora" />
+              )}
             </div>
+            {simMode && (
+              <div className="mt-5 pt-4 border-t border-amber-100">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h3 className="text-xs font-semibold text-gray-700">Turnos del {DIA_PILLS[diaIdx]}</h3>
+                    <p className="text-[10px] text-gray-400">Ajusta inicio/fin para simular el impacto en cobertura sin guardar</p>
+                  </div>
+                  {Object.keys(turnosSim).length > 0 && (
+                    <button onClick={() => setTurnosSim({})} className="text-xs text-gray-400 hover:text-gray-600 underline">
+                      Restablecer todo
+                    </button>
+                  )}
+                </div>
+                {turnosDia.length === 0 ? (
+                  <p className="text-xs text-gray-400 text-center py-4">Sin agentes programados este día</p>
+                ) : (
+                  <div className="space-y-1 max-h-60 overflow-y-auto">
+                    {turnosDia.map(t => {
+                      const sim = turnosSim[t.id] || {}
+                      const inicio = sim.turno_inicio ?? t.turno_inicio ?? ''
+                      const fin = sim.turno_fin ?? t.turno_fin ?? ''
+                      const changed = !!(sim.turno_inicio || sim.turno_fin)
+                      return (
+                        <div key={t.id} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs ${changed ? 'bg-amber-50 border border-amber-200' : 'bg-gray-50'}`}>
+                          <span className="font-medium text-gray-700 flex-1 min-w-0 truncate" title={t.agente}>{t.agente}</span>
+                          <input
+                            type="time"
+                            value={inicio}
+                            onChange={e => setTurnosSim(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || {}), turno_inicio: e.target.value } }))}
+                            className="border border-gray-200 rounded px-1.5 py-1 text-xs w-[82px] focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          />
+                          <span className="text-gray-400 shrink-0">→</span>
+                          <input
+                            type="time"
+                            value={fin}
+                            onChange={e => setTurnosSim(prev => ({ ...prev, [t.id]: { ...(prev[t.id] || {}), turno_fin: e.target.value } }))}
+                            className="border border-gray-200 rounded px-1.5 py-1 text-xs w-[82px] focus:outline-none focus:ring-2 focus:ring-amber-300"
+                          />
+                          {changed && (
+                            <button
+                              onClick={() => setTurnosSim(prev => { const n = { ...prev }; delete n[t.id]; return n })}
+                              className="text-gray-300 hover:text-gray-500 shrink-0 text-base leading-none"
+                              title="Restaurar turno"
+                            >×</button>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
             <SLChart slData={slData} aht={aht} simultaneidad={simultaneidad} />
           </>
         )}
