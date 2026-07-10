@@ -1,5 +1,5 @@
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, BarChart2, CalendarDays } from 'lucide-react'
+import { LogOut, BarChart2, CalendarDays, LayoutGrid } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import VipWFM from './VipWFM'
 
@@ -22,6 +22,12 @@ export default function WFMPage() {
               <Link to="/wfm" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-primary-50 text-primary-700 transition">
                 <BarChart2 className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">WFM</span>
+              </Link>
+            )}
+            {esAdmin && (
+              <Link to="/asignacion" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition">
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Asignación</span>
               </Link>
             )}
           </div>

@@ -170,6 +170,19 @@ export async function getAgentesEnTurnoAhora() {
   return resultado
 }
 
+// Líneas distintas que existen en vip_turnos_programados
+export async function getLineasActivas() {
+  const { data } = await supabase
+    .from('vip_turnos_programados')
+    .select('linea_atencion')
+    .not('linea_atencion', 'is', null)
+  const seen = new Set()
+  return (data ?? [])
+    .map(r => r.linea_atencion)
+    .filter(l => seen.has(l) ? false : seen.add(l))
+    .sort()
+}
+
 // Agentes en turno para cualquier línea (Cobranzas, RETENCIÓN, Especializado…)
 export async function getAgentesEnTurnoLinea(linea) {
   const ahora = new Date()

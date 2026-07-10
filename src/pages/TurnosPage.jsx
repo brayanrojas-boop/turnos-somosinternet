@@ -1,5 +1,5 @@
 import { useAuth } from '../contexts/AuthContext'
-import { LogOut, CalendarDays, BarChart2 } from 'lucide-react'
+import { LogOut, CalendarDays, BarChart2, LayoutGrid } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import VipMisTurnos from './VipMisTurnos'
 
@@ -23,6 +23,12 @@ export default function TurnosPage() {
               <Link to="/wfm" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition">
                 <BarChart2 className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">WFM</span>
+              </Link>
+            )}
+            {esAdmin && (
+              <Link to="/asignacion" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition">
+                <LayoutGrid className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Asignación</span>
               </Link>
             )}
           </div>
