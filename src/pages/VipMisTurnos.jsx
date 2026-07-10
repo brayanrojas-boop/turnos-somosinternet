@@ -2110,7 +2110,9 @@ export default function VipMisTurnos() {
       try {
         await importarTurnosDesdeSheet(sheetImportUrl.trim())
         await cargar()
-      } catch {}
+      } catch (e) {
+        console.error('Auto-sync fallido:', e.message)
+      }
     }, 10 * 60 * 1000)
     return () => clearInterval(id)
   }, [esAdmin, sheetImportUrl])
@@ -2310,7 +2312,8 @@ export default function VipMisTurnos() {
             setTimeout(() => { setRExito(false); setRProg(null); setProcesando(null) }, 2500)
             return
           } else {
-            alert(`Error: ${forzado.motivo}`)
+            await rechazarCambioSupervisor(id, 'Sistema', forzado.motivo)
+            alert(`Cambio no aplicado: ${forzado.motivo}`)
           }
         } else {
           await rechazarCambioSupervisor(id, 'Sistema', resultado.motivo)

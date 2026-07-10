@@ -361,6 +361,7 @@ export async function importarTurnosDesdeSheet(url) {
     .select('*')
     .eq('estado', 'aprobado')
     .gte('updated_at', hace90)
+    .order('updated_at', { ascending: true })
 
   for (const cambio of (aprobados ?? [])) {
     const afectaSol = fechasSet.has(cambio.turno_sol_fecha)
@@ -911,13 +912,14 @@ export async function crearSolicitudCambio({ solicitanteNombre, receptorNombre, 
 
 export async function getSolicitudesCambio(nombre) {
   if (!nombre) return []
-  const { data, error } = await supabase
-    .from('vip_cambios_turno')
-    .select('*')
-    .or(`solicitante_nombre.ilike.${nombre},receptor_nombre.ilike.${nombre}`)
-    .order('created_at', { ascending: false })
-  if (error) throw new Error(error.message)
-  return data ?? []
+  const [{ data: enviadas }, { data: recibidas }] = await Promise.all([
+    supabase.from('vip_cambios_turno').select('*').ilike('solicitante_nombre', nombre).order('created_at', { ascending: false }),
+    supabase.from('vip_cambios_turno').select('*').ilike('receptor_nombre', nombre).order('created_at', { ascending: false }),
+  ])
+  const todas = [...(enviadas ?? []), ...(recibidas ?? [])]
+  const vistas = new Set()
+  return todas.filter(r => { if (vistas.has(r.id)) return false; vistas.add(r.id); return true })
+    .sort((a, b) => b.created_at.localeCompare(a.created_at))
 }
 
 export async function responderSolicitudCambio(id, aceptar, motivoRechazo) {
@@ -1217,7 +1219,7 @@ export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre
   if (e1) throw new Error(e1.message)
   const { error: e2 } = await supabase.from('vip_turnos_programados').update({ agente: turno1.agente }).eq('id', turno2.id)
   if (e2) throw new Error(e2.message)
-  await supabase.from('vip_cambios_turno').insert({
+  const { error: ae } = await supabase.from('vip_cambios_turno').insert({
     solicitante_nombre: turno1.agente,
     receptor_nombre:    turno2.agente,
     turno_sol_fecha:    turno1.fecha,
@@ -1231,6 +1233,7 @@ export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre
     aprobado_por:       supervisorNombre,
     updated_at:         new Date().toISOString(),
   })
+  if (ae) throw new Error(ae.message)
 }
 
 // ── Turno del analista hoy (para banner de aviso) ─────────────────────────
