@@ -2199,19 +2199,10 @@ export default function VipMisTurnos() {
     if (!gestionModal) return
     setGG(true); setGExito(false); setGProg(5)
     try {
-      setGProg(15)
+      setGProg(20)
       await intercambiarTurnosDirecto(gestionModal.sel1, gestionModal.sel2, profile.full_name, gestionMotivo.trim())
-      setGProg(40)
-
-      let fakeP = 40
-      const ticker = setInterval(() => {
-        fakeP = Math.min(fakeP + 2, 78)
-        setGProg(fakeP)
-      }, 350)
-      await _sincSheet(gestionModal.sel1, gestionModal.sel2)
-      clearInterval(ticker)
-      setGProg(85)
-
+      setGProg(60)
+      _sincSheet(gestionModal.sel1, gestionModal.sel2)
       await cargar()
       setGProg(100)
       setGExito(true)
@@ -2288,7 +2279,7 @@ export default function VipMisTurnos() {
       setRProg(70)
       if (resultado.ok) {
         if (scriptUrl.trim() && scriptSecret.trim()) {
-          try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), resultado.cambio) } catch {}
+          aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), resultado.cambio).catch(() => {})
         }
         setRProg(100)
         setRExito(true)
@@ -2305,7 +2296,7 @@ export default function VipMisTurnos() {
           const forzado = await forzarAplicarCambioAceptado(id)
           if (forzado.ok) {
             if (scriptUrl.trim() && scriptSecret.trim()) {
-              try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), forzado.cambio) } catch {}
+              aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), forzado.cambio).catch(() => {})
             }
             setRProg(100); setRExito(true)
             await cargar()
@@ -3282,10 +3273,8 @@ export default function VipMisTurnos() {
                       />
                     </div>
                     <p className="text-xs text-gray-500 text-center">
-                      {gestionProgreso < 40
+                      {gestionProgreso < 60
                         ? 'Guardando en base de datos…'
-                        : gestionProgreso < 85
-                        ? 'Sincronizando con Google Sheet…'
                         : 'Actualizando vista…'
                       } {gestionProgreso}%
                     </p>
