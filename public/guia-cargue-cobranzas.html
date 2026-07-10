@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Guía — Cargue de base Cobranzas</title>
+<style>
+  :root {
+    --bg: #f0fdf4;
+    --surface: #ffffff;
+    --surface-2: #f8fafc;
+    --brand: #1e3a8a;
+    --green: #16a34a;
+    --green-light: #dcfce7;
+    --green-border: #bbf7d0;
+    --green-dark: #15803d;
+    --blue: #2563eb;
+    --blue-light: #dbeafe;
+    --amber: #b45309;
+    --amber-bg: #fffbeb;
+    --amber-border: #fde68a;
+    --text: #111827;
+    --text-2: #374151;
+    --text-3: #6b7280;
+    --text-4: #9ca3af;
+    --border: #e5e7eb;
+    --step-line: #d1fae5;
+    --radius: 12px;
+    --num-size: 36px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0a1628;
+      --surface: #111827;
+      --surface-2: #1e293b;
+      --brand: #93c5fd;
+      --green: #4ade80;
+      --green-light: #052e16;
+      --green-border: #14532d;
+      --green-dark: #86efac;
+      --blue: #60a5fa;
+      --blue-light: #1e3a6e;
+      --amber: #fbbf24;
+      --amber-bg: #1c1309;
+      --amber-border: #78350f;
+      --text: #f1f5f9;
+      --text-2: #cbd5e1;
+      --text-3: #94a3b8;
+      --text-4: #475569;
+      --border: #1f2937;
+      --step-line: #14532d;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0a1628; --surface: #111827; --surface-2: #1e293b;
+    --brand: #93c5fd; --green: #4ade80; --green-light: #052e16;
+    --green-border: #14532d; --green-dark: #86efac;
+    --blue: #60a5fa; --blue-light: #1e3a6e;
+    --amber: #fbbf24; --amber-bg: #1c1309; --amber-border: #78350f;
+    --text: #f1f5f9; --text-2: #cbd5e1; --text-3: #94a3b8; --text-4: #475569;
+    --border: #1f2937; --step-line: #14532d;
+  }
+  :root[data-theme="light"] {
+    --bg: #f0fdf4; --surface: #ffffff; --surface-2: #f8fafc;
+    --brand: #1e3a8a; --green: #16a34a; --green-light: #dcfce7;
+    --green-border: #bbf7d0; --green-dark: #15803d;
+    --blue: #2563eb; --blue-light: #dbeafe;
+    --amber: #b45309; --amber-bg: #fffbeb; --amber-border: #fde68a;
+    --text: #111827; --text-2: #374151; --text-3: #6b7280; --text-4: #9ca3af;
+    --border: #e5e7eb; --step-line: #d1fae5;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+    font-size: 15px; line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+    padding: 40px 16px 80px;
+  }
+
+  .wrap { width: 100%; max-width: 660px; margin: 0 auto; }
+
+  /* Header */
+  .header {
+    text-align: center; margin-bottom: 40px;
+  }
+  .header-badge {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--green-light); border: 1px solid var(--green-border);
+    color: var(--green-dark); font-size: 12px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase;
+    padding: 5px 12px; border-radius: 100px; margin-bottom: 16px;
+  }
+  .header-badge svg { width: 13px; height: 13px; }
+  .header h1 {
+    font-size: 28px; font-weight: 800; color: var(--text); line-height: 1.2;
+    letter-spacing: -.02em; text-wrap: balance; margin-bottom: 10px;
+  }
+  .header p {
+    font-size: 15px; color: var(--text-3); max-width: 480px; margin: 0 auto;
+    text-wrap: balance;
+  }
+
+  /* Prereq callout */
+  .prereq {
+    background: var(--amber-bg); border: 1px solid var(--amber-border);
+    border-radius: var(--radius); padding: 16px 18px; margin-bottom: 32px;
+  }
+  .prereq-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 13px; font-weight: 700; color: var(--amber);
+    text-transform: uppercase; letter-spacing: .05em; margin-bottom: 10px;
+  }
+  .prereq-title svg { width: 15px; height: 15px; }
+  .prereq p {
+    font-size: 14px; color: var(--text-2); margin-bottom: 10px;
+  }
+  .sheet-steps {
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .sheet-step {
+    display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-2);
+  }
+  .sheet-step .n {
+    background: var(--amber); color: #fff;
+    width: 18px; height: 18px; border-radius: 50%;
+    font-size: 10px; font-weight: 800; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; margin-top: 2px;
+  }
+  .menu-path {
+    display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  }
+  .menu-item {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 4px; padding: 1px 7px; font-size: 12px; font-weight: 600;
+    color: var(--text); white-space: nowrap;
+  }
+  .menu-arrow { color: var(--text-4); font-size: 11px; }
+
+  /* Steps */
+  .steps { display: flex; flex-direction: column; }
+
+  .step {
+    display: grid;
+    grid-template-columns: var(--num-size) 1fr;
+    gap: 0 18px;
+    position: relative;
+  }
+  .step:not(:last-child)::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--num-size) / 2);
+    top: calc(var(--num-size) + 8px);
+    bottom: -8px;
+    width: 2px;
+    background: var(--step-line);
+    transform: translateX(-1px);
+  }
+
+  .step-num {
+    width: var(--num-size); height: var(--num-size);
+    border-radius: 50%;
+    background: var(--green); color: #fff;
+    font-size: 15px; font-weight: 800;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; position: relative; z-index: 1;
+    box-shadow: 0 0 0 4px var(--bg);
+  }
+  .step-num.optional {
+    background: var(--blue);
+  }
+
+  .step-body {
+    padding-bottom: 32px;
+  }
+  .step:last-child .step-body { padding-bottom: 0; }
+
+  .step-title {
+    font-size: 16px; font-weight: 700; color: var(--text);
+    line-height: var(--num-size);
+    margin-bottom: 8px;
+  }
+  .step-title .opt-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .06em;
+    color: var(--blue); background: var(--blue-light);
+    padding: 2px 7px; border-radius: 100px; margin-left: 8px; vertical-align: middle;
+  }
+
+  .step-desc {
+    font-size: 14px; color: var(--text-2); line-height: 1.65;
+  }
+  .step-desc p { margin-bottom: 8px; }
+  .step-desc p:last-child { margin-bottom: 0; }
+
+  /* UI mockup blocks */
+  .ui-mock {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 16px;
+    margin-top: 12px; font-size: 13px;
+  }
+  .ui-mock-label {
+    font-size: 11px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .07em; color: var(--text-4); margin-bottom: 10px;
+  }
+  .ui-tabs {
+    display: flex; gap: 4px; flex-wrap: wrap;
+  }
+  .ui-tab {
+    padding: 5px 12px; border-radius: 6px; font-size: 12px; font-weight: 500;
+    color: var(--text-3); background: var(--surface-2); border: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  .ui-tab.active {
+    background: var(--green); color: #fff; border-color: var(--green);
+    font-weight: 700;
+  }
+  .ui-input-row {
+    display: flex; gap: 8px; align-items: center; margin-top: 12px;
+  }
+  .ui-input {
+    flex: 1; padding: 7px 10px; border: 1px solid var(--border);
+    border-radius: 8px; font-size: 12px; color: var(--text-3);
+    background: var(--surface-2); min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .ui-btn {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 7px 12px; border-radius: 8px; font-size: 12px; font-weight: 700;
+    white-space: nowrap; flex-shrink: 0;
+  }
+  .ui-btn.green { background: #16a34a; color: #fff; }
+  .ui-btn.blue  { background: #2563eb; color: #fff; }
+  .ui-btn svg   { width: 12px; height: 12px; }
+  .ui-success {
+    background: var(--green-light); border: 1px solid var(--green-border);
+    border-radius: 8px; padding: 10px 12px; font-size: 13px;
+    color: var(--green-dark); display: flex; align-items: flex-start; gap: 8px;
+    margin-top: 12px;
+  }
+  .ui-success svg { width: 14px; height: 14px; flex-shrink: 0; margin-top: 1px; }
+  .ui-blue-bar {
+    background: var(--blue-light); border: 1px solid #93c5fd;
+    border-radius: 8px; padding: 10px 12px; font-size: 12px;
+    color: var(--blue); display: flex; align-items: center; justify-content: space-between;
+    margin-top: 10px; gap: 8px; flex-wrap: wrap;
+  }
+  .ui-sidebar {
+    display: flex; gap: 0;
+  }
+  .ui-sidebar-nav {
+    width: 110px; flex-shrink: 0; border-right: 1px solid var(--border);
+    padding-right: 10px;
+  }
+  .ui-nav-item {
+    padding: 6px 10px; border-radius: 6px; font-size: 12px; color: var(--text-3);
+    margin-bottom: 2px;
+  }
+  .ui-nav-item.active {
+    background: var(--green-light); color: var(--green-dark); font-weight: 700;
+  }
+  .ui-content { flex: 1; padding-left: 12px; }
+
+  /* Note */
+  .note {
+    background: var(--surface-2); border-left: 3px solid var(--green);
+    border-radius: 0 8px 8px 0; padding: 10px 14px;
+    font-size: 13px; color: var(--text-3); margin-top: 12px;
+  }
+  .note strong { color: var(--text-2); }
+
+  /* Summary footer */
+  .summary {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 20px;
+    margin-top: 40px;
+  }
+  .summary-title {
+    font-size: 13px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: .06em; color: var(--text-3); margin-bottom: 14px;
+  }
+  .summary-grid {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .summary-row {
+    display: flex; align-items: flex-start; gap: 10px; font-size: 13px; color: var(--text-2);
+  }
+  .summary-row .check {
+    color: var(--green); font-weight: 800; flex-shrink: 0; margin-top: 1px;
+  }
+
+  /* Responsive */
+  @media (max-width: 520px) {
+    .header h1 { font-size: 22px; }
+    .ui-input-row { flex-direction: column; align-items: stretch; }
+    .ui-btn { justify-content: center; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="header-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+      CRM · Módulo Cobranzas
+    </div>
+    <h1>Cómo subir la base de cobranzas</h1>
+    <p>Paso a paso para importar la base desde Google Sheet y distribuir casos entre analistas SARA.</p>
+  </div>
+
+  <!-- Prerequisito -->
+  <div class="prereq">
+    <div class="prereq-title">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      Antes de empezar — Publicar el Sheet
+    </div>
+    <p>El Google Sheet con la base de cobranzas debe estar publicado en la web como CSV. Solo necesitas hacer esto una vez; el link queda guardado.</p>
+    <div class="sheet-steps">
+      <div class="sheet-step">
+        <span class="n">1</span>
+        <span>Abre el Google Sheet de cobranzas SOMOS.</span>
+      </div>
+      <div class="sheet-step">
+        <span class="n">2</span>
+        <span>En el menú superior: <span class="menu-path"><span class="menu-item">Archivo</span><span class="menu-arrow">›</span><span class="menu-item">Compartir</span><span class="menu-arrow">›</span><span class="menu-item">Publicar en la web</span></span></span>
+      </div>
+      <div class="sheet-step">
+        <span class="n">3</span>
+        <span>Selecciona la hoja con la base (ej. <em>Hoja1</em>) y en formato elige <span class="menu-item">Valores separados por comas (.csv)</span>.</span>
+      </div>
+      <div class="sheet-step">
+        <span class="n">4</span>
+        <span>Clic en <strong>Publicar</strong> y copia el link que aparece. Ese es el link que usarás en el CRM.</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps">
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <div class="step-title">Abre el CRM e ingresa al módulo de Cobranzas</div>
+        <div class="step-desc">
+          <p>En el menú lateral izquierdo del CRM, busca la sección <strong>Cobranzas</strong> y haz clic.</p>
+          <div class="ui-mock">
+            <div class="ui-mock-label">Sidebar CRM</div>
+            <div class="ui-sidebar">
+              <div class="ui-sidebar-nav">
+                <div class="ui-nav-item">Inicio</div>
+                <div class="ui-nav-item">VIP</div>
+                <div class="ui-nav-item active">Cobranzas</div>
+                <div class="ui-nav-item">Soporte</div>
+              </div>
+              <div class="ui-content" style="display:flex;align-items:center;padding-top:4px;">
+                <span style="font-size:12px;color:var(--text-4)">← Haz clic aquí</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <div class="step-title">Ve a la pestaña "Importar cargue"</div>
+        <div class="step-desc">
+          <p>En la parte superior del módulo hay varias pestañas. Haz clic en <strong>Importar cargue</strong> (5.ª pestaña).</p>
+          <div class="ui-mock">
+            <div class="ui-mock-label">Pestañas del módulo</div>
+            <div class="ui-tabs">
+              <div class="ui-tab">Tablero</div>
+              <div class="ui-tab">Cola del día</div>
+              <div class="ui-tab">Base completa</div>
+              <div class="ui-tab">Gestiones</div>
+              <div class="ui-tab active">Importar cargue</div>
+              <div class="ui-tab">Turno SARA</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <div class="step-title">Pega la URL del Google Sheet</div>
+        <div class="step-desc">
+          <p>En el campo <strong>URL del Google Sheet</strong>, pega el link que copiaste al publicar el Sheet. Si ya lo pegaste antes, el CRM lo recuerda automáticamente.</p>
+          <div class="ui-mock">
+            <div class="ui-mock-label">Campo de URL</div>
+            <div class="ui-input-row">
+              <div class="ui-input">https://docs.google.com/spreadsheets/d/e/…/pub?output=csv</div>
+            </div>
+          </div>
+          <div class="note">
+            <strong>¿El link tiene múltiples hojas?</strong> Asegúrate de que la URL incluya el parámetro <code>gid=</code> apuntando a la hoja correcta. Puedes encontrarlo en el link de publicación al seleccionar la hoja específica.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <div class="step-title">Haz clic en "Sincronizar Sheet"</div>
+        <div class="step-desc">
+          <p>Pulsa el botón verde <strong>Sincronizar Sheet</strong> a la derecha del campo. El sistema importa todas las filas del Sheet con BPO = SOMOS.</p>
+          <div class="ui-mock">
+            <div class="ui-mock-label">Botón de sincronización</div>
+            <div class="ui-input-row">
+              <div class="ui-input">https://docs.google.com/spreadsheets/d/e/…/pub?output=csv</div>
+              <div class="ui-btn green">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 11-2.12-9.36L23 10"/></svg>
+                Sincronizar Sheet
+              </div>
+            </div>
+          </div>
+          <div class="note">
+            El proceso puede tomar unos segundos. El botón mostrará <strong>"Sincronizando…"</strong> mientras trabaja. No cierres la pestaña.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <div class="step-title">Verifica el mensaje de confirmación</div>
+        <div class="step-desc">
+          <p>Al terminar aparece un mensaje verde con el número de registros sincronizados. Si hay algún error, aparecerá un mensaje rojo indicando qué ocurrió.</p>
+          <div class="ui-mock">
+            <div class="ui-mock-label">Mensaje de éxito</div>
+            <div class="ui-success">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+              <span>✓ 352 registros sincronizados desde el Sheet.</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6 (optional) -->
+    <div class="step">
+      <div class="step-num optional">6</div>
+      <div class="step-body">
+        <div class="step-title">
+          Distribuir casos entre analistas
+          <span class="opt-badge">Opcional</span>
+        </div>
+        <div class="step-desc">
+          <p>Si hay analistas SARA actualmente en turno, aparece automáticamente una barra azul con sus nombres. Haz clic en <strong>Distribuir casos</strong> para asignar la base de manera equitativa.</p>
+          <div class="ui-mock">
+            <div class="ui-mock-label">Distribución automática</div>
+            <div class="ui-blue-bar">
+              <span><strong>3</strong> analistas en turno: Ana López, Carlos Pérez, María Gómez</span>
+              <div class="ui-btn blue">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+                Distribuir casos
+              </div>
+            </div>
+          </div>
+          <div class="note">
+            El sistema reparte de forma equitativa los casos <strong>EXPIRED</strong> (≥7 días mora) y los casos <strong>UNPAID</strong> (&lt;7 días) entre todos los analistas en turno, garantizando que cada uno reciba la misma proporción de ambos tipos.
+          </div>
+          <p style="margin-top:10px;font-size:13px;color:var(--text-3)">Si no hay analistas en turno, la barra no aparece. Puedes distribuir después cuando estén activos o hacerlo manualmente desde "Base completa".</p>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- /steps -->
+
+  <!-- Summary -->
+  <div class="summary">
+    <div class="summary-title">Resumen del proceso</div>
+    <div class="summary-grid">
+      <div class="summary-row">
+        <span class="check">✓</span>
+        <span>El Sheet debe estar publicado en la web como CSV (solo se configura una vez).</span>
+      </div>
+      <div class="summary-row">
+        <span class="check">✓</span>
+        <span>Solo se importan filas con <strong>BPO = SOMOS</strong>; el resto se descarta.</span>
+      </div>
+      <div class="summary-row">
+        <span class="check">✓</span>
+        <span>Las asignaciones de analista ya existentes en el CRM se preservan al sincronizar.</span>
+      </div>
+      <div class="summary-row">
+        <span class="check">✓</span>
+        <span>Puedes sincronizar las veces que necesites; los registros se actualizan sin duplicados.</span>
+      </div>
+      <div class="summary-row">
+        <span class="check">✓</span>
+        <span>La distribución de casos solo aplica a los analistas que estén activos en turno al momento de hacer clic.</span>
+      </div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
