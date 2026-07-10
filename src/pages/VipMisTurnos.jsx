@@ -1981,6 +1981,7 @@ export default function VipMisTurnos() {
   const { profile, user } = useAuth()
   const { t } = useTranslation()
   const esAdmin = ['admin','supervisor'].includes(profile?.role)
+  const esPropietario = user?.email === 'brayan.rojas@somosinternet.co'
 
   const [tab, setTab]           = useState('mis-turnos')
   const [offset, setOffset]     = useState(0)
@@ -2105,7 +2106,7 @@ export default function VipMisTurnos() {
 
   // Auto-sincroniza desde Sheet cada 10 minutos si hay URL configurada (solo admin)
   useEffect(() => {
-    if (!esAdmin || !sheetImportUrl.trim()) return
+    if (!esAdmin || !esPropietario || !sheetImportUrl.trim()) return
     const id = setInterval(async () => {
       try {
         await importarTurnosDesdeSheet(sheetImportUrl.trim())
@@ -2392,7 +2393,7 @@ export default function VipMisTurnos() {
           </p>
         </div>
         <div className="flex gap-2">
-          {esAdmin && (
+          {esAdmin && esPropietario && (
             <button onClick={handleImportar} disabled={importando}
               title="Sincronizar turnos desde Google Sheet"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg disabled:opacity-50 transition">
