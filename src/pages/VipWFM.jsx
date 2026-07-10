@@ -349,8 +349,8 @@ function genSchedule(analistas, heatmap, objetivo, lunes, options = {}) {
 }
 
 // ── BarChart ──────────────────────────────────────────────────────────────────
-function BarChart({ data, recomendado }) {
-  const max = Math.max(...data.map(d => d.count), recomendado, 1)
+function BarChart({ data }) {
+  const max = Math.max(...data.map(d => d.count), 1)
   const HORAS = Array.from({ length: 18 }, (_, i) => i + 6)
 
   return (
@@ -374,12 +374,6 @@ function BarChart({ data, recomendado }) {
       {/* Área principal */}
       <div className="flex-1 flex flex-col gap-0.5 min-w-0">
         <div className="relative h-32">
-          {/* Línea de recomendado */}
-          <div
-            className="absolute inset-x-0 border-t-2 border-dashed border-indigo-400 opacity-70 pointer-events-none z-10"
-            style={{ bottom: `${(recomendado / max) * 100}%` }}
-            title={`Recomendado: ${recomendado} ag.`}
-          />
           {/* Líneas de guía horizontales */}
           <div className="absolute inset-x-0 border-t border-gray-100" style={{ bottom: '50%' }} />
           <div className="absolute inset-x-0 border-t border-gray-100" style={{ bottom: '0%' }} />
@@ -389,8 +383,6 @@ function BarChart({ data, recomendado }) {
               const cnt = data.find(d => d.hora === h)?.count || 0
               const pct = cnt / max
               const barH = Math.max(pct * 100, cnt > 0 ? 4 : 0)
-              const ratio = recomendado > 0 ? cnt / recomendado : 1
-              const color = ratio >= 1 ? 'bg-green-500' : ratio >= 0.5 ? 'bg-amber-400' : 'bg-red-500'
               return (
                 <div
                   key={h}
@@ -398,7 +390,7 @@ function BarChart({ data, recomendado }) {
                   title={`${h}:00 — ${cnt} agente${cnt !== 1 ? 's' : ''}`}
                 >
                   <div
-                    className={`w-full rounded-t transition-all relative ${color}`}
+                    className="w-full rounded-t transition-all relative bg-indigo-500"
                     style={{ height: `${barH}%` }}
                   >
                     {cnt > 0 && barH >= 22 && (
@@ -920,13 +912,6 @@ export default function VipWFM() {
       {showConfig && (
         <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 flex items-center gap-4 flex-wrap">
           <Settings2 className="w-4 h-4 text-indigo-500 shrink-0" />
-          <label className="text-xs text-indigo-800 font-medium">Casos por agente/hora (objetivo):</label>
-          <input
-            type="number" min={1} max={20} value={objetivo}
-            onChange={e => setObjetivo(Math.max(1, Number(e.target.value)))}
-            className="w-16 text-xs border border-indigo-300 rounded px-2 py-1 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400"
-          />
-          <span className="text-xs text-indigo-500 mr-4">Para calcular agentes recomendados</span>
           <label className="text-xs text-indigo-800 font-medium">Casos simultáneos/analista:</label>
           <input
             type="number" min={1} max={20} value={simultaneidad}
@@ -1019,15 +1004,9 @@ export default function VipWFM() {
           <div className="h-36 animate-pulse bg-gray-50 rounded-lg" />
         ) : (
           <>
-            <BarChart data={barData} recomendado={recomendadoDia} />
+            <BarChart data={barData} />
             <div className="flex gap-4 mt-3 flex-wrap">
-              <LegendItem color="bg-green-500" label={`≥ recomendado (${recomendadoDia} ag.)`} />
-              <LegendItem color="bg-amber-400" label="50–99%" />
-              <LegendItem color="bg-red-500" label="< 50%" />
-              <span className="flex items-center gap-1.5 text-xs text-gray-400">
-                <span className="inline-block w-6 border-t-2 border-dashed border-indigo-400" />
-                Recomendado
-              </span>
+              <LegendItem color="bg-indigo-500" label="Agentes programados por hora" />
             </div>
             <SLChart slData={slData} aht={aht} simultaneidad={simultaneidad} />
           </>
