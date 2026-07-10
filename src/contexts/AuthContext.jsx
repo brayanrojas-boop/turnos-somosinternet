@@ -17,7 +17,7 @@ function _derivarHabilidades(lineas) {
     if (l.includes('retencion') || l.includes('retención') || l.includes('retenció')) {
       habs.add('retencion')
     }
-    if (l.includes('sara')) {
+    if (l.includes('cobranzas') || l.includes('sara')) {
       habs.add('cobranzas')
     }
   }

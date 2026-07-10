@@ -170,7 +170,7 @@ export async function getAgentesEnTurnoAhora() {
   return resultado
 }
 
-// Agentes en turno para cualquier línea (SARA, RETENCIÓN, Especializado…)
+// Agentes en turno para cualquier línea (Cobranzas, RETENCIÓN, Especializado…)
 export async function getAgentesEnTurnoLinea(linea) {
   const ahora = new Date()
   const horaActual = ahora.toTimeString().slice(0, 5)
