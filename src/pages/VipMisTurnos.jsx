@@ -1999,6 +1999,8 @@ export default function VipMisTurnos() {
   const [rechazarModal, setRM]        = useState(null)
   const [motivoRechazo, setMotR]      = useState('')
   const [procesando, setProcesando]   = useState(null)
+  const [respProgreso, setRProg]      = useState(null)
+  const [respExito, setRExito]        = useState(false)
 
   // Filtros malla
   const [filtroAnalista, setFA]   = useState('')
@@ -2275,34 +2277,51 @@ export default function VipMisTurnos() {
   async function handleResponder(id, aceptar) {
     if (!aceptar) { setRM({ id, tipo: 'receptor' }); return }
     setProcesando(id)
+    setRProg(10)
+    setRExito(false)
     try {
       await responderSolicitudCambio(id, true, null)
+      setRProg(35)
       const resultado = await autoAplicarCambioAceptado(id)
+      setRProg(70)
       if (resultado.ok) {
         if (scriptUrl.trim() && scriptSecret.trim()) {
           try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), resultado.cambio) } catch {}
         }
+        setRProg(100)
+        setRExito(true)
+        await cargar()
+        setTimeout(() => { setRExito(false); setRProg(null); setProcesando(null) }, 2500)
+        return
       } else if (resultado.motivo?.includes('descanso')) {
-        // Advertencia de 12h — preguntar si quiere continuar de todos modos
+        setRProg(null)
         const continuar = window.confirm(
           `⚠️ Advertencia: ${resultado.motivo}\n\n¿Aplicar el cambio de turno de todos modos?`
         )
         if (continuar) {
+          setProcesando(id); setRProg(50)
           const forzado = await forzarAplicarCambioAceptado(id)
-          if (forzado.ok && scriptUrl.trim() && scriptSecret.trim()) {
-            try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), forzado.cambio) } catch {}
-          } else if (!forzado.ok) {
+          if (forzado.ok) {
+            if (scriptUrl.trim() && scriptSecret.trim()) {
+              try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), forzado.cambio) } catch {}
+            }
+            setRProg(100); setRExito(true)
+            await cargar()
+            setTimeout(() => { setRExito(false); setRProg(null); setProcesando(null) }, 2500)
+            return
+          } else {
             alert(`Error: ${forzado.motivo}`)
           }
         } else {
           await rechazarCambioSupervisor(id, 'Sistema', resultado.motivo)
         }
       } else {
+        setRProg(null)
         await rechazarCambioSupervisor(id, 'Sistema', resultado.motivo)
         alert(`Cambio no aplicado: ${resultado.motivo}`)
       }
       await cargar()
-    } catch (e) { alert(e.message) }
+    } catch (e) { alert(e.message); setRProg(null) }
     setProcesando(null)
   }
 
@@ -2799,6 +2818,22 @@ export default function VipMisTurnos() {
                               <XCircle className="w-3.5 h-3.5"/> {t('turnos.rechazar')}
                             </button>
                           </div>
+                          {procesando === s.id && respProgreso !== null && (
+                            <div className="space-y-1.5 pt-1">
+                              <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                <div className={`h-full rounded-full transition-all duration-300 ${respExito ? 'bg-green-500' : 'bg-primary-500'}`}
+                                  style={{ width: `${respProgreso}%` }} />
+                              </div>
+                              {respExito
+                                ? <p className="text-xs text-green-600 text-center font-medium">✓ ¡Cambio aplicado con éxito!</p>
+                                : <p className="text-xs text-gray-500 text-center">
+                                    {respProgreso < 35 ? 'Registrando aceptación…'
+                                      : respProgreso < 70 ? 'Aplicando intercambio…'
+                                      : 'Sincronizando…'} {respProgreso}%
+                                  </p>
+                              }
+                            </div>
+                          )}
                         </div>
                       ))}
                     </div>
