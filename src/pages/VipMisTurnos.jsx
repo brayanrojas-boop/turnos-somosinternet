@@ -1806,11 +1806,15 @@ function BreaksMonitor() {
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
           {coberturaLineas.map(({ linea, total, enBreak, activos: act }) => {
             const pct = total > 0 ? Math.round((act / total) * 100) : 0
-            const color = pct >= 80 ? 'border-green-200 bg-green-50' : pct >= 50 ? 'border-yellow-200 bg-yellow-50' : 'border-red-200 bg-red-50'
-            const textColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
-            const barColor  = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-500'
+            const selected = filtroLinea === linea
+            const color = selected
+              ? 'border-primary-400 bg-primary-50 ring-2 ring-primary-300'
+              : pct >= 80 ? 'border-green-200 bg-green-50' : pct >= 50 ? 'border-yellow-200 bg-yellow-50' : 'border-red-200 bg-red-50'
+            const textColor = selected ? 'text-primary-700' : pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
+            const barColor  = selected ? 'bg-primary-500' : pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-500'
             return (
-              <div key={linea} className={`rounded-xl border p-3 ${color}`}>
+              <button key={linea} onClick={() => setFL(selected ? '' : linea)}
+                className={`rounded-xl border p-3 text-left w-full transition-all ${color} hover:shadow-sm`}>
                 <p className="text-xs font-semibold text-gray-500 truncate mb-2">{linea}</p>
                 <div className="flex items-end justify-between mb-2">
                   <div>
@@ -1827,11 +1831,15 @@ function BreaksMonitor() {
                   <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
                 </div>
                 <p className="text-[10px] text-gray-400 mt-1">{pct}% activos ahora</p>
-              </div>
+              </button>
             )
           })}
         </div>
       )}
+
+      <div className={filtroLinea ? 'flex gap-5 items-start' : ''}>
+        {/* Columna principal */}
+        <div className={filtroLinea ? 'flex-1 min-w-0 space-y-5' : 'space-y-5'}>
 
       {/* KPIs rápidos de pausas reales */}
       {pausas.length > 0 && (
@@ -2030,6 +2038,50 @@ function BreaksMonitor() {
           )}
         </div>
       )}
+
+        </div>{/* fin columna principal */}
+
+        {/* Panel lateral de analistas */}
+        {filtroLinea && (() => {
+          const agentesLinea = [...new Map(
+            activos.filter(t => t.linea_atencion === filtroLinea).map(t => [t.agente, t])
+          ).values()].sort((a, b) => (a.agente ?? '').localeCompare(b.agente ?? ''))
+
+          return (
+            <div className="w-64 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-4">
+              <div className="px-3 py-2.5 bg-primary-50 border-b border-primary-100 flex items-center justify-between">
+                <p className="text-xs font-semibold text-primary-700 truncate">{filtroLinea}</p>
+                <span className="text-xs text-primary-500 bg-primary-100 px-1.5 py-0.5 rounded-full">{agentesLinea.length}</span>
+              </div>
+              <div className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
+                {agentesLinea.map(t => {
+                  const ini = toH(t.turno_inicio); const fin = toH(t.turno_fin)
+                  const enTurno = ini !== null && fin !== null && now >= ini && now <= fin
+                  const bIni = toH(t.break_inicio); const bFin = toH(t.break_fin)
+                  const lIni = toH(t.lunch_inicio); const lFin = toH(t.lunch_fin)
+                  const enBreak = enTurno && (
+                    (bIni !== null && bFin !== null && now >= bIni && now <= bFin) ||
+                    (lIni !== null && lFin !== null && now >= lIni && now <= lFin)
+                  )
+                  const status = enBreak ? 'break' : enTurno ? 'activo' : 'fuera'
+                  return (
+                    <div key={t.agente} className="px-3 py-2.5 flex items-center gap-2.5">
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${status === 'activo' ? 'bg-green-500' : status === 'break' ? 'bg-amber-400' : 'bg-gray-300'}`} />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium text-gray-800 truncate">{t.agente?.split(' ').slice(0,2).join(' ')}</p>
+                        <p className="text-[10px] text-gray-400">{fmtT(t.turno_inicio)}–{fmtT(t.turno_fin)}</p>
+                      </div>
+                      <span className={`text-[10px] font-semibold shrink-0 ${status === 'activo' ? 'text-green-600' : status === 'break' ? 'text-amber-600' : 'text-gray-400'}`}>
+                        {status === 'activo' ? 'Activo' : status === 'break' ? 'Break' : 'Fuera'}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )
+        })()}
+      </div>{/* fin flex wrapper */}
     </div>
   )
 }
@@ -3221,7 +3273,7 @@ export default function VipMisTurnos() {
           )}
           {/* ── MONITOR BREAKS (solo admin/supervisor) ── */}
           {tab === 'breaks' && esAdmin && (
-            <div className="max-w-xl">
+            <div className="max-w-5xl">
               <BreaksMonitor />
             </div>
           )}
