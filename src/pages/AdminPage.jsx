@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
-import { getProfiles, updateProfile, enviarResetPassword } from '../lib/vip'
+import { getProfiles, updateProfile } from '../lib/vip'
 import {
   LogOut, CalendarDays, BarChart2, LayoutGrid, Users,
-  Search, X, KeyRound, Pencil, CheckCircle, AlertCircle,
+  Search, X, Pencil, CheckCircle, AlertCircle,
 } from 'lucide-react'
 
 const ROLES = [
@@ -85,17 +85,6 @@ export default function AdminPage() {
       showToast(false, e.message)
     }
     setSaving(false)
-  }
-
-  async function handleReset(u) {
-    if (!u.email) return showToast(false, 'Este usuario no tiene email registrado')
-    if (!confirm(`¿Enviar email de recuperación a ${u.email}?`)) return
-    try {
-      await enviarResetPassword(u.email)
-      showToast(true, `Email de recuperación enviado a ${u.email}`)
-    } catch(e) {
-      showToast(false, e.message)
-    }
   }
 
   const filtrados = usuarios.filter(u => {
@@ -227,13 +216,6 @@ export default function AdminPage() {
                         >
                           <Pencil className="w-3.5 h-3.5" />
                         </button>
-                        <button
-                          onClick={() => handleReset(u)}
-                          title="Enviar reset de contraseña"
-                          className="p-1.5 rounded-lg text-gray-400 hover:text-amber-600 hover:bg-amber-50 transition"
-                        >
-                          <KeyRound className="w-3.5 h-3.5" />
-                        </button>
                       </div>
                     </td>
                   </tr>
@@ -291,16 +273,6 @@ export default function AdminPage() {
                   placeholder="Ej: Juan Carlos Pérez"
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"
                 />
-              </div>
-
-              <div className="pt-1 border-t border-gray-100">
-                <button
-                  type="button"
-                  onClick={() => { setModal(null); handleReset(modal) }}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-2 text-sm text-amber-600 border border-amber-200 rounded-lg hover:bg-amber-50 transition mb-3"
-                >
-                  <KeyRound className="w-4 h-4" /> Enviar email de recuperación de contraseña
-                </button>
               </div>
 
               <div className="flex gap-3">

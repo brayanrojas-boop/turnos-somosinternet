@@ -19,14 +19,6 @@ export async function updateProfile(id, fields) {
   if (error) throw new Error(error.message)
 }
 
-export async function enviarResetPassword(email) {
-  const base = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || window.location.origin
-  const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${base}/reset-password`,
-  })
-  if (error) throw new Error(error.message)
-}
-
 // ── Helpers ────────────────────────────────────────────────────────────────
 export function hoyISO() {
   const d = new Date()
