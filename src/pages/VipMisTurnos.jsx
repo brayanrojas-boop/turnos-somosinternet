@@ -1137,9 +1137,14 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
 
                         {/* Contenido */}
                         <div className="relative z-10 p-1">
-                          <p className="text-[9px] font-bold text-white leading-tight">
-                            {formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}
-                          </p>
+                          <div className="flex items-center gap-0.5 leading-tight">
+                            <p className="text-[9px] font-bold text-white flex-1">
+                              {formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}
+                            </p>
+                            {turno.email && (turno.email.toLowerCase().includes('remot') || turno.email.toLowerCase().includes('teletrabajo') || turno.email.toLowerCase().includes('casa')) && (
+                              <span title="Remoto" className="text-[10px] leading-none">🏠</span>
+                            )}
+                          </div>
                           {turno.linea_atencion && (
                             <p className="text-[8px] truncate font-medium" style={{ color: color.light }}>{turno.linea_atencion}</p>
                           )}
