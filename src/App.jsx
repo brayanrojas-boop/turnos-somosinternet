@@ -4,6 +4,7 @@ import Login from './pages/Login'
 import TurnosPage from './pages/TurnosPage'
 import WFMPage from './pages/WFMPage'
 import AsignacionPage from './pages/AsignacionPage'
+import AdminPage from './pages/AdminPage'
 
 function ProtectedRoute({ children }) {
   const { user, loading } = useAuth()
@@ -37,6 +38,9 @@ export default function App() {
           } />
           <Route path="/asignacion" element={
             <ProtectedRoute><AsignacionPage /></ProtectedRoute>
+          } />
+          <Route path="/admin" element={
+            <ProtectedRoute><AdminPage /></ProtectedRoute>
           } />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

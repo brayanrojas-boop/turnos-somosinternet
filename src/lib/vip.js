@@ -1,6 +1,31 @@
 import { supabase } from './supabase'
 import { notificarCasoCreado } from './slack'
 
+// ── Administración de usuarios ────────────────────────────────────────────────
+export async function getProfiles() {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, role, nombre_turno, created_at, updated_at')
+    .order('full_name')
+  if (error) throw new Error(error.message)
+  return data ?? []
+}
+
+export async function updateProfile(id, fields) {
+  const { error } = await supabase
+    .from('profiles')
+    .update(fields)
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+}
+
+export async function enviarResetPassword(email) {
+  const { error } = await supabase.auth.resetPasswordForEmail(email, {
+    redirectTo: `${window.location.origin}/reset-password`,
+  })
+  if (error) throw new Error(error.message)
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 export function hoyISO() {
   const d = new Date()
