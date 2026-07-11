@@ -2044,7 +2044,11 @@ function BreaksMonitor() {
         {/* Panel lateral de analistas */}
         {filtroLinea && (() => {
           const agentesLinea = [...new Map(
-            activos.filter(t => t.linea_atencion === filtroLinea).map(t => [t.agente, t])
+            activos.filter(t => {
+              if (t.linea_atencion !== filtroLinea) return false
+              const ini = toH(t.turno_inicio); const fin = toH(t.turno_fin)
+              return ini !== null && fin !== null && now >= ini && now <= fin
+            }).map(t => [t.agente, t])
           ).values()].sort((a, b) => (a.agente ?? '').localeCompare(b.agente ?? ''))
 
           return (
@@ -2055,15 +2059,12 @@ function BreaksMonitor() {
               </div>
               <div className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
                 {agentesLinea.map(t => {
-                  const ini = toH(t.turno_inicio); const fin = toH(t.turno_fin)
-                  const enTurno = ini !== null && fin !== null && now >= ini && now <= fin
                   const bIni = toH(t.break_inicio); const bFin = toH(t.break_fin)
                   const lIni = toH(t.lunch_inicio); const lFin = toH(t.lunch_fin)
-                  const enBreak = enTurno && (
+                  const enBreak =
                     (bIni !== null && bFin !== null && now >= bIni && now <= bFin) ||
                     (lIni !== null && lFin !== null && now >= lIni && now <= lFin)
-                  )
-                  const status = enBreak ? 'break' : enTurno ? 'activo' : 'fuera'
+                  const status = enBreak ? 'break' : 'activo'
                   return (
                     <div key={t.agente} className="px-3 py-2.5 flex items-center gap-2.5">
                       <div className={`w-2 h-2 rounded-full shrink-0 ${status === 'activo' ? 'bg-green-500' : status === 'break' ? 'bg-amber-400' : 'bg-gray-300'}`} />
@@ -2071,8 +2072,8 @@ function BreaksMonitor() {
                         <p className="text-xs font-medium text-gray-800 truncate">{t.agente?.split(' ').slice(0,2).join(' ')}</p>
                         <p className="text-[10px] text-gray-400">{fmtT(t.turno_inicio)}–{fmtT(t.turno_fin)}</p>
                       </div>
-                      <span className={`text-[10px] font-semibold shrink-0 ${status === 'activo' ? 'text-green-600' : status === 'break' ? 'text-amber-600' : 'text-gray-400'}`}>
-                        {status === 'activo' ? 'Activo' : status === 'break' ? 'Break' : 'Fuera'}
+                      <span className={`text-[10px] font-semibold shrink-0 ${status === 'activo' ? 'text-green-600' : 'text-amber-600'}`}>
+                        {status === 'activo' ? 'Activo' : 'Break'}
                       </span>
                     </div>
                   )
