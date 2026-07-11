@@ -26,12 +26,6 @@ export default function TurnosPage() {
               </Link>
             )}
             {esAdmin && (
-              <Link to="/asignacion" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition">
-                <LayoutGrid className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Asignación</span>
-              </Link>
-            )}
-            {esAdmin && (
               <Link to="/admin" className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 hover:bg-gray-100 transition">
                 <Users className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Usuarios</span>
