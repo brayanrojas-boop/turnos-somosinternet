@@ -20,8 +20,9 @@ export async function updateProfile(id, fields) {
 }
 
 export async function enviarResetPassword(email) {
+  const base = import.meta.env.VITE_APP_URL?.replace(/\/$/, '') || window.location.origin
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
-    redirectTo: `${window.location.origin}/reset-password`,
+    redirectTo: `${base}/reset-password`,
   })
   if (error) throw new Error(error.message)
 }
