@@ -1687,6 +1687,27 @@ function BreaksMonitor() {
   const proximos = eventos.filter(e => now < e.ini && (e.ini - now) * 60 <= 90).sort((a,b) => a.ini - b.ini)
   const masTarde = eventos.filter(e => now < e.ini && (e.ini - now) * 60 > 90).sort((a,b) => a.ini - b.ini)
 
+  // ── Cobertura en tiempo real por línea ───────────────────────────────────────
+  const coberturaLineas = lineas.map(linea => {
+    const agentesLinea = activos.filter(t => t.linea_atencion === linea)
+    const enTurnoAhora = agentesLinea.filter(t => {
+      const ini = toH(t.turno_inicio); const fin = toH(t.turno_fin)
+      return ini !== null && fin !== null && now >= ini && now <= fin
+    })
+    const enBreakAhora = enTurnoAhora.filter(t => {
+      const bIni = toH(t.break_inicio); const bFin = toH(t.break_fin)
+      const lIni = toH(t.lunch_inicio); const lFin = toH(t.lunch_fin)
+      return (bIni !== null && bFin !== null && now >= bIni && now <= bFin) ||
+             (lIni !== null && lFin !== null && now >= lIni && now <= lFin)
+    })
+    return {
+      linea,
+      total:    enTurnoAhora.length,
+      enBreak:  enBreakAhora.length,
+      activos:  enTurnoAhora.length - enBreakAhora.length,
+    }
+  }).filter(r => r.total > 0)
+
   // ── Datos de pausas reales ───────────────────────────────────────────────────
   const activas    = pausas.filter(p => !p.fin_real)
   const terminadas = pausas.filter(p => p.fin_real)
@@ -1779,6 +1800,38 @@ function BreaksMonitor() {
           </button>
         </div>
       </div>
+
+      {/* Cobertura activa por línea */}
+      {coberturaLineas.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+          {coberturaLineas.map(({ linea, total, enBreak, activos: act }) => {
+            const pct = total > 0 ? Math.round((act / total) * 100) : 0
+            const color = pct >= 80 ? 'border-green-200 bg-green-50' : pct >= 50 ? 'border-yellow-200 bg-yellow-50' : 'border-red-200 bg-red-50'
+            const textColor = pct >= 80 ? 'text-green-700' : pct >= 50 ? 'text-yellow-700' : 'text-red-600'
+            const barColor  = pct >= 80 ? 'bg-green-500' : pct >= 50 ? 'bg-yellow-400' : 'bg-red-500'
+            return (
+              <div key={linea} className={`rounded-xl border p-3 ${color}`}>
+                <p className="text-xs font-semibold text-gray-500 truncate mb-2">{linea}</p>
+                <div className="flex items-end justify-between mb-2">
+                  <div>
+                    <span className={`text-2xl font-bold tabular-nums ${textColor}`}>{act}</span>
+                    <span className="text-xs text-gray-400 ml-1">/ {total}</span>
+                  </div>
+                  {enBreak > 0 && (
+                    <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full font-medium">
+                      ☕ {enBreak} en break
+                    </span>
+                  )}
+                </div>
+                <div className="h-1.5 bg-white/70 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">{pct}% activos ahora</p>
+              </div>
+            )
+          })}
+        </div>
+      )}
 
       {/* KPIs rápidos de pausas reales */}
       {pausas.length > 0 && (
