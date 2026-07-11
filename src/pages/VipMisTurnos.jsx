@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext'
 import { useTranslation } from 'react-i18next'
 import {
@@ -2088,19 +2088,25 @@ export default function VipMisTurnos() {
   const { lunes, domingo } = getLunes(offset)
   const tieneRango = !!(filtroDesde || filtroHasta)
 
+  const cargandoRef = useRef(false)
   const cargar = useCallback(async () => {
+    if (cargandoRef.current) return
+    cargandoRef.current = true
     setLoading(true)
-    // Si hay filtro de rango, usarlo; si no, la semana actual
-    const inicio = filtroDesde || toISO(lunes)
-    const fin    = filtroHasta || toISO(domingo)
-    const [sem, sols] = await Promise.all([
-      getTurnosSemana(inicio, fin),
-      getSolicitudesCambio(nombreEfectivo),
-    ])
-    setTS(sem)
-    setSols(sols)
-    if (esAdmin) setPend(await getSolicitudesPendientesSupervisor())
-    setLoading(false)
+    try {
+      const inicio = filtroDesde || toISO(lunes)
+      const fin    = filtroHasta || toISO(domingo)
+      const [sem, sols] = await Promise.all([
+        getTurnosSemana(inicio, fin),
+        getSolicitudesCambio(nombreEfectivo),
+      ])
+      setTS(sem)
+      setSols(sols)
+      if (esAdmin) setPend(await getSolicitudesPendientesSupervisor())
+    } finally {
+      cargandoRef.current = false
+      setLoading(false)
+    }
   }, [toISO(lunes), toISO(domingo), nombreEfectivo, esAdmin, filtroDesde, filtroHasta])
 
   useEffect(() => { cargar() }, [cargar])
