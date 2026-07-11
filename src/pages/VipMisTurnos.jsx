@@ -2104,19 +2104,6 @@ export default function VipMisTurnos() {
     if (nombreEfectivo) getMisHorasExtra(nombreEfectivo).then(setMisHE)
   }, [nombreEfectivo])
 
-  // Auto-sincroniza desde Sheet cada 10 minutos si hay URL configurada (solo admin)
-  useEffect(() => {
-    if (!esAdmin || !esPropietario || !sheetImportUrl.trim()) return
-    const id = setInterval(async () => {
-      try {
-        await importarTurnosDesdeSheet(sheetImportUrl.trim())
-        await cargar()
-      } catch (e) {
-        console.error('Auto-sync fallido:', e.message)
-      }
-    }, 10 * 60 * 1000)
-    return () => clearInterval(id)
-  }, [esAdmin, sheetImportUrl])
 
   const hoyStr = localDateISO()
 
