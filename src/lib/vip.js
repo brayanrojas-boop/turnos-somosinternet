@@ -261,44 +261,20 @@ function _parsearCSV(texto) {
   })
 }
 
-function _hora(val, esFin = false) {
+function _hora(val) {
   if (!val || val.trim() === '' || val.trim() === '-') return null
   const s = val.trim()
-
-  // Decimal fraction (Google Sheets exporta TIME como 0.916667 para 22:00)
-  if (/^\d*\.\d+$/.test(s) || (s === '0' && esFin)) {
-    const dec = parseFloat(s)
-    if (!isNaN(dec) && dec >= 0 && dec <= 1) {
-      const totalMin = Math.round(dec * 24 * 60)
-      const h = String(Math.floor(totalMin / 60) % 24).padStart(2, '0')
-      const m = String(totalMin % 60).padStart(2, '0')
-      if (h === '00' && m === '00' && !esFin) return null
-      return `${h}:${m}`
-    }
-  }
-
-  // Formato ISO datetime: "2026-06-21 14:00:00" o "2026-06-21T14:00:00"
-  const iso = s.match(/\d{4}-\d{2}-\d{2}[T\s](\d{1,2}):(\d{2})/)
-  if (iso) {
-    const h = iso[1].padStart(2, '0'), m = iso[2]
-    if (h === '00' && m === '00' && !esFin) return null
+  const dt = s.match(/\d{4}-\d{2}-\d{2}[T\s](\d{1,2}):(\d{2})/)
+  if (dt) {
+    const h = dt[1].padStart(2, '0'), m = dt[2]
+    if (h === '00' && m === '00') return null
     return `${h}:${m}`
   }
-
-  // Formato datetime US/EU con slash: "7/11/2026 22:00:00" o "11/7/2026 22:00"
-  const slashDt = s.match(/\d{1,2}\/\d{1,2}\/\d{4}\s+(\d{1,2}):(\d{2})/)
-  if (slashDt) {
-    const h = slashDt[1].padStart(2, '0'), m = slashDt[2]
-    if (h === '00' && m === '00' && !esFin) return null
-    return `${h}:${m}`
-  }
-
-  // Formato hora plana: "14:00" o "14:00:00"
-  const plain = s.match(/^(\d{1,2}):(\d{2})/)
-  if (!plain) return null
-  const hh = plain[1].padStart(2, '0'), mn = plain[2]
-  if (hh === '00' && mn === '00' && !esFin) return null
-  return `${hh}:${mn}`
+  const m = s.match(/^(\d{1,2}):(\d{2})/)
+  if (!m) return null
+  const hh = m[1].padStart(2, '0'), mm = m[2]
+  if (hh === '00' && mm === '00') return null
+  return `${hh}:${mm}`
 }
 
 function _numero(val) {
@@ -356,11 +332,11 @@ export async function importarTurnosDesdeSheet(url) {
       agente:            v[col('agente')]?.trim() || null,
       novedad:           v[col('novedad')]?.trim() || null,
       turno_inicio:      _hora(v[col('turno_inicio')]),
-      turno_fin:         _hora(v[col('turno_fin')], true),
+      turno_fin:         _hora(v[col('turno_fin')]),
       break_inicio:      _hora(v[col('break_inicio')]),
-      break_fin:         _hora(v[col('break_fin')], true),
+      break_fin:         _hora(v[col('break_fin')]),
       lunch_inicio:      _hora(v[col('lunch_inicio')]),
-      lunch_fin:         _hora(v[col('lunch_fin')], true),
+      lunch_fin:         _hora(v[col('lunch_fin')]),
       horas_programadas: _numero(v[col('horas_programadas')]),
       entrada:           _hora(v[col('entrada')]),
       hd:                _numero(v[col('hd')]),
