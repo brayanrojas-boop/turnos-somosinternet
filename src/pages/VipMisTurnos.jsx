@@ -110,9 +110,7 @@ function ModalidadBadge({ email }) {
 }
 
 // ── Validación básica ─────────────────────────────────────────────────────────
-function esDescanso(turno) {
-  return !turno?.turno_inicio || (turno?.email ?? '').toUpperCase() === 'DESCANSO'
-}
+function esDescanso(turno) { return !turno?.turno_inicio }
 
 function turnoInicioMs(turno) {
   if (turno.turno_inicio) return new Date(`${turno.fecha}T${turno.turno_inicio}`).getTime()

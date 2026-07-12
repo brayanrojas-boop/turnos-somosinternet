@@ -261,22 +261,24 @@ function _parsearCSV(texto) {
   })
 }
 
-function _hora(val) {
+function _hora(val, esFin = false) {
   if (!val || val.trim() === '' || val.trim() === '-') return null
   const s = val.trim()
   // Formato datetime: "2026-06-21 14:00:00" → extraer solo la hora
   const dt = s.match(/\d{4}-\d{2}-\d{2}[T\s](\d{1,2}):(\d{2})/)
   if (dt) {
     const h = dt[1].padStart(2, '0'), m = dt[2]
-    if (h === '00' && m === '00') return null // Sheets exporta celdas vacías como 0:00:00
+    // 00:00 en columna de inicio/break = celda vacía exportada por Sheets → null
+    // 00:00 en columna de fin = medianoche real → conservar
+    if (h === '00' && m === '00' && !esFin) return null
     return `${h}:${m}`
   }
   // Formato hora plana: "14:00" o "14:00:00"
-  const m = s.match(/^(\d{1,2}):(\d{2})/)
-  if (!m) return null
-  const hh = m[1].padStart(2, '0'), mm = m[2]
-  if (hh === '00' && mm === '00') return null // ídem para formato plano
-  return `${hh}:${mm}`
+  const mm = s.match(/^(\d{1,2}):(\d{2})/)
+  if (!mm) return null
+  const hh = mm[1].padStart(2, '0'), mn = mm[2]
+  if (hh === '00' && mn === '00' && !esFin) return null
+  return `${hh}:${mn}`
 }
 
 function _numero(val) {
@@ -334,11 +336,11 @@ export async function importarTurnosDesdeSheet(url) {
       agente:            v[col('agente')]?.trim() || null,
       novedad:           v[col('novedad')]?.trim() || null,
       turno_inicio:      _hora(v[col('turno_inicio')]),
-      turno_fin:         _hora(v[col('turno_fin')]),
+      turno_fin:         _hora(v[col('turno_fin')], true),
       break_inicio:      _hora(v[col('break_inicio')]),
-      break_fin:         _hora(v[col('break_fin')]),
+      break_fin:         _hora(v[col('break_fin')], true),
       lunch_inicio:      _hora(v[col('lunch_inicio')]),
-      lunch_fin:         _hora(v[col('lunch_fin')]),
+      lunch_fin:         _hora(v[col('lunch_fin')], true),
       horas_programadas: _numero(v[col('horas_programadas')]),
       entrada:           _hora(v[col('entrada')]),
       hd:                _numero(v[col('hd')]),
