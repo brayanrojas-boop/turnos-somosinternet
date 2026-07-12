@@ -264,19 +264,39 @@ function _parsearCSV(texto) {
 function _hora(val, esFin = false) {
   if (!val || val.trim() === '' || val.trim() === '-') return null
   const s = val.trim()
-  // Formato datetime: "2026-06-21 14:00:00" → extraer solo la hora
-  const dt = s.match(/\d{4}-\d{2}-\d{2}[T\s](\d{1,2}):(\d{2})/)
-  if (dt) {
-    const h = dt[1].padStart(2, '0'), m = dt[2]
-    // 00:00 en columna de inicio/break = celda vacía exportada por Sheets → null
-    // 00:00 en columna de fin = medianoche real → conservar
+
+  // Decimal fraction (Google Sheets exporta TIME como 0.916667 para 22:00)
+  if (/^\d*\.\d+$/.test(s) || (s === '0' && esFin)) {
+    const dec = parseFloat(s)
+    if (!isNaN(dec) && dec >= 0 && dec <= 1) {
+      const totalMin = Math.round(dec * 24 * 60)
+      const h = String(Math.floor(totalMin / 60) % 24).padStart(2, '0')
+      const m = String(totalMin % 60).padStart(2, '0')
+      if (h === '00' && m === '00' && !esFin) return null
+      return `${h}:${m}`
+    }
+  }
+
+  // Formato ISO datetime: "2026-06-21 14:00:00" o "2026-06-21T14:00:00"
+  const iso = s.match(/\d{4}-\d{2}-\d{2}[T\s](\d{1,2}):(\d{2})/)
+  if (iso) {
+    const h = iso[1].padStart(2, '0'), m = iso[2]
     if (h === '00' && m === '00' && !esFin) return null
     return `${h}:${m}`
   }
+
+  // Formato datetime US/EU con slash: "7/11/2026 22:00:00" o "11/7/2026 22:00"
+  const slashDt = s.match(/\d{1,2}\/\d{1,2}\/\d{4}\s+(\d{1,2}):(\d{2})/)
+  if (slashDt) {
+    const h = slashDt[1].padStart(2, '0'), m = slashDt[2]
+    if (h === '00' && m === '00' && !esFin) return null
+    return `${h}:${m}`
+  }
+
   // Formato hora plana: "14:00" o "14:00:00"
-  const mm = s.match(/^(\d{1,2}):(\d{2})/)
-  if (!mm) return null
-  const hh = mm[1].padStart(2, '0'), mn = mm[2]
+  const plain = s.match(/^(\d{1,2}):(\d{2})/)
+  if (!plain) return null
+  const hh = plain[1].padStart(2, '0'), mn = plain[2]
   if (hh === '00' && mn === '00' && !esFin) return null
   return `${hh}:${mn}`
 }
