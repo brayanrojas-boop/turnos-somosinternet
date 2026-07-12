@@ -1646,6 +1646,7 @@ function BreaksMonitor() {
     if (isNaN(h)) return null
     return h + (m || 0) / 60
   }
+  function toHEnd(s) { const h = toH(s); return h === 0 ? 24 : h }
   function fmtT(s) {
     if (!s) return '—'
     let time = String(s)
@@ -1691,7 +1692,7 @@ function BreaksMonitor() {
   const coberturaLineas = lineas.map(linea => {
     const agentesLinea = activos.filter(t => t.linea_atencion === linea)
     const enTurnoAhora = agentesLinea.filter(t => {
-      const ini = toH(t.turno_inicio); const fin = toH(t.turno_fin)
+      const ini = toH(t.turno_inicio); const fin = toHEnd(t.turno_fin)
       return ini !== null && fin !== null && now >= ini && now <= fin
     })
     const enBreakAhora = enTurnoAhora.filter(t => {
@@ -2046,7 +2047,7 @@ function BreaksMonitor() {
           const agentesLinea = [...new Map(
             activos.filter(t => {
               if (t.linea_atencion !== filtroLinea) return false
-              const ini = toH(t.turno_inicio); const fin = toH(t.turno_fin)
+              const ini = toH(t.turno_inicio); const fin = toHEnd(t.turno_fin)
               return ini !== null && fin !== null && now >= ini && now <= fin
             }).map(t => [t.agente, t])
           ).values()].sort((a, b) => (a.agente ?? '').localeCompare(b.agente ?? ''))
