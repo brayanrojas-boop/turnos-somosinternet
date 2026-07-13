@@ -2235,17 +2235,14 @@ export default function VipMisTurnos() {
   )
   const mallaPorFecha = mallafiltrada.reduce((a, turno) => { if (!a[turno.fecha]) a[turno.fecha] = []; a[turno.fecha].push(turno); return a }, {})
 
-  // Fechas visibles en la malla:
-  // - Con rango: todos los días del rango
-  // - Sin rango: días de la semana desde HOY en adelante (ocultar pasados)
+  // Fechas visibles en la malla: todos los días de la semana / rango seleccionado
   const diasVisibles = (() => {
     if (tieneRango) {
       const inicio = filtroDesde || toISO(lunes)
       const fin    = filtroHasta || toISO(domingo)
       return rangoFechas(inicio, fin)
     }
-    // Solo hoy y futuro de la semana seleccionada
-    return diasSemana.filter(f => f >= hoyStr)
+    return diasSemana
   })()
 
   const misTurnosSemana = turnosSemana.filter(turno => turno.agente?.toLowerCase() === nombreEfectivo.toLowerCase())
