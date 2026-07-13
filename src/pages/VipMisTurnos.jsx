@@ -2312,6 +2312,7 @@ export default function VipMisTurnos() {
       await intercambiarTurnosDirecto(gestionModal.sel1, gestionModal.sel2, profile.full_name, gestionMotivo.trim())
       setGProg(60)
       _sincSheet(gestionModal.sel1, gestionModal.sel2)
+      await new Promise(r => setTimeout(r, 800))
       await cargar()
       setGProg(100)
       setGExito(true)
