@@ -2288,7 +2288,10 @@ export default function VipMisTurnos() {
   }
 
   async function _sincSheet(turno1, turno2) {
-    if (!scriptUrl.trim() || !scriptSecret.trim()) return
+    if (!scriptUrl.trim() || !scriptSecret.trim()) {
+      console.warn('Sheet write-back omitido: falta URL o secret en configuración')
+      return
+    }
     try {
       await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), {
         solicitante_nombre: turno1.agente,
@@ -2297,7 +2300,7 @@ export default function VipMisTurnos() {
         turno_rec_fecha:    turno2.fecha,
       })
     } catch (e) {
-      console.warn('Sheet no actualizado:', e.message)
+      alert(`⚠️ El cambio se guardó en la base de datos, pero NO se actualizó el Google Sheet.\n\nError: ${e.message}\n\nVerifica la URL Web App y el secret en ⚙️ Configuración.`)
     }
   }
 
