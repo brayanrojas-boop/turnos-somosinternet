@@ -2207,7 +2207,8 @@ export default function VipMisTurnos() {
         getTurnosSemana(inicio, fin),
         getSolicitudesCambio(nombreEfectivo),
       ])
-      setTS(sem)
+      const LINEA_ALIAS_MAP = { SARA: 'COBRANZAS' }
+      setTS(sem.map(t => ({ ...t, linea_atencion: LINEA_ALIAS_MAP[t.linea_atencion] ?? t.linea_atencion })))
       setSols(sols)
       if (esAdmin) setPend(await getSolicitudesPendientesSupervisor())
     } finally {
@@ -2246,7 +2247,7 @@ export default function VipMisTurnos() {
   })()
 
   const misTurnosSemana = turnosSemana.filter(turno => turno.agente?.toLowerCase() === nombreEfectivo.toLowerCase())
-  const lineas = [...new Set(turnosSemana.map(turno => turno.linea_atencion).filter(Boolean))].sort()
+  const lineas = [...new Set(turnosSemana.map(t => t.linea_atencion).filter(Boolean))].sort()
 
   const nombre    = nombreEfectivo.toLowerCase()
   const recibidas = solicitudes.filter(s => s.receptor_nombre?.toLowerCase() === nombre && s.estado === 'pendiente')

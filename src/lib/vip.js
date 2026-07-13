@@ -301,6 +301,12 @@ function _sheetACsvUrl(url) {
   return `https://docs.google.com/spreadsheets/d/${m[1]}/pub?output=csv`
 }
 
+const LINEA_ALIAS = { sara: 'COBRANZAS' }
+function _normLinea(v) {
+  if (!v) return null
+  return LINEA_ALIAS[v.toLowerCase()] ?? v
+}
+
 export async function importarTurnosDesdeSheet(url) {
   const csvUrl = _sheetACsvUrl(url.trim())
 
@@ -328,7 +334,7 @@ export async function importarTurnosDesdeSheet(url) {
     registros.push({
       fecha:             _fecha(v[col('fecha')]),
       dia_semana:        v[col('dia_semana')]?.trim() || null,
-      linea_atencion:    v[col('linea_atencion')]?.trim() || null,
+      linea_atencion:    _normLinea(v[col('linea_atencion')]?.trim() || null),
       agente:            v[col('agente')]?.trim() || null,
       novedad:           v[col('novedad')]?.trim() || null,
       turno_inicio:      _hora(v[col('turno_inicio')]),
