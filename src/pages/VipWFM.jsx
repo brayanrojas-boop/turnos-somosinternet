@@ -737,7 +737,6 @@ const AHT_POR_LINEA = [
   { patron: 'retención',  aht: 52  },
   { patron: 'soporte tv', aht: 34  },
   { patron: 'cobranzas',  aht: 27  },
-  { patron: 'sara',       aht: 27  },
   { patron: 'sac',        aht: 30  },
 ]
 
