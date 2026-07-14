@@ -574,10 +574,12 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
       }
       if (scriptUrl?.trim() && scriptSecret?.trim()) {
         const dt = (h) => h ? `${turno.fecha} ${h}:00` : null
+        const esVotacion = novedadFinal?.startsWith('Votación')
         const camposSheet = {
           ...campos,
-          turno_inicio: descanso ? null : dt(inicio),
-          turno_fin:    descanso ? null : dt(fin),
+          // Si es votación, enviar tiempos originales al sheet (el ajuste es solo visual en la app)
+          turno_inicio: descanso ? null : dt(esVotacion ? (turno.turno_inicio?.slice(0,5) || inicio) : inicio),
+          turno_fin:    descanso ? null : dt(esVotacion ? (turno.turno_fin?.slice(0,5)    || fin)   : fin),
           break_inicio: descanso ? null : dt(brkIni),
           break_fin:    descanso ? null : dt(brkFin),
           lunch_inicio: descanso ? null : dt(lchIni),
