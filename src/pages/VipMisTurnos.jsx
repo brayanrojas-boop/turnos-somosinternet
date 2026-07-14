@@ -512,11 +512,36 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
   const [linea,     setLinea]     = useState(turno.linea_atencion || '')
   const [tipoT,     setTipoT]     = useState(turno.tipo_turno || '')
   const [modalidad, setModalidad] = useState(turno.email || 'OFICINA')
-  const NOVEDAD_OPTS = ['Incapacidad', 'Vacaciones', 'Permiso médico', 'Calamidad', 'Licencia']
+  const NOVEDAD_OPTS = ['Incapacidad', 'Vacaciones', 'Permiso médico', 'Calamidad', 'Licencia', 'Votación']
+  const VOTACION_VALS = ['Votación inicio', 'Votación fin']
   const novIni  = turno.novedad || ''
-  const novTipoIni  = NOVEDAD_OPTS.includes(novIni) ? novIni : (novIni ? 'Otro' : '')
+  const novTipoIni  = VOTACION_VALS.includes(novIni) ? 'Votación' : NOVEDAD_OPTS.includes(novIni) ? novIni : (novIni ? 'Otro' : '')
   const [novTipo,   setNovTipo]   = useState(novTipoIni)
   const [novTexto,  setNovTexto]  = useState(novTipoIni === 'Otro' ? novIni : '')
+  const [votSide,   setVotSide]   = useState(novIni === 'Votación fin' ? 'fin' : 'inicio')
+
+  function addHrs(t, h) {
+    if (!t) return ''
+    const [hh, mm] = t.split(':').map(Number)
+    return `${String(((hh + h) % 24 + 24) % 24).padStart(2, '0')}:${String(mm).padStart(2, '0')}`
+  }
+
+  function handleNovTipo(val) {
+    setNovTipo(val)
+    if (val !== 'Otro') setNovTexto('')
+    if (val === 'Votación') {
+      if (turno.turno_inicio) setInicio(addHrs(turno.turno_inicio.slice(0, 5), 4))
+      setVotSide('inicio')
+    }
+  }
+
+  function handleVotSide(side) {
+    setVotSide(side)
+    if (side === 'inicio' && turno.turno_inicio) setInicio(addHrs(turno.turno_inicio.slice(0, 5), 4))
+    if (side === 'fin'    && turno.turno_fin)    setFin(addHrs(turno.turno_fin.slice(0, 5), -4))
+    if (side === 'inicio' && turno.turno_fin)    setFin(turno.turno_fin.slice(0, 5))
+    if (side === 'fin'    && turno.turno_inicio) setInicio(turno.turno_inicio.slice(0, 5))
+  }
   const [agente,    setAgente]    = useState(turno.agente || '')
   const [saving,    setSaving]    = useState(false)
   const [err,       setErr]       = useState(null)
@@ -527,7 +552,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
 
   async function guardar() {
     setSaving(true); setErr(null)
-    const novedadFinal = novTipo === 'Otro' ? novTexto.trim() : novTipo
+    const novedadFinal = novTipo === 'Otro' ? novTexto.trim() : novTipo === 'Votación' ? `Votación ${votSide}` : novTipo
     const campos = {
       turno_inicio:  descanso ? null : inicio  || null,
       turno_fin:     descanso ? null : fin     || null,
@@ -683,12 +708,33 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
             <label className="text-xs font-medium text-gray-700 block mb-1">
               Novedad <span className="text-gray-400 font-normal">(opcional)</span>
             </label>
-            <select value={novTipo} onChange={e => { setNovTipo(e.target.value); if (e.target.value !== 'Otro') setNovTexto('') }}
+            <select value={novTipo} onChange={e => handleNovTipo(e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
               <option value="">Sin novedad</option>
-              {NOVEDAD_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+              {NOVEDAD_OPTS.map(o => <option key={o} value={o}>{o === 'Votación' ? '🗳 Votación (4h)' : o}</option>)}
               <option value="Otro">Otro…</option>
             </select>
+            {novTipo === 'Votación' && (
+              <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-200 space-y-2">
+                <p className="text-xs text-blue-700 font-medium">¿Las 4 horas van al inicio o al fin del turno?</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => handleVotSide('inicio')}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${votSide === 'inicio' ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-700 hover:bg-blue-100'}`}>
+                    ⬅ Inicio del turno
+                  </button>
+                  <button type="button" onClick={() => handleVotSide('fin')}
+                    className={`flex-1 py-1.5 rounded-lg text-xs font-medium border transition ${votSide === 'fin' ? 'bg-blue-600 text-white border-blue-600' : 'border-blue-300 text-blue-700 hover:bg-blue-100'}`}>
+                    Fin del turno ➡
+                  </button>
+                </div>
+                <p className="text-[10px] text-blue-500">
+                  {votSide === 'inicio'
+                    ? `Entrada a las ${addHrs(turno.turno_inicio?.slice(0,5) || '00:00', 4)} en vez de ${turno.turno_inicio?.slice(0,5) || '—'}`
+                    : `Sale a las ${addHrs(turno.turno_fin?.slice(0,5) || '00:00', -4)} en vez de ${turno.turno_fin?.slice(0,5) || '—'}`
+                  }
+                </p>
+              </div>
+            )}
             {novTipo === 'Otro' && (
               <input type="text" value={novTexto} onChange={e => setNovTexto(e.target.value)}
                 placeholder="Describe la novedad"
@@ -1721,7 +1767,7 @@ function BreaksMonitor() {
   const masTarde = eventos.filter(e => now < e.ini && (e.ini - now) * 60 > 90).sort((a,b) => a.ini - b.ini)
 
   // ── Cobertura en tiempo real por línea ───────────────────────────────────────
-  const NOVEDADES_AUSENCIA = ['incapacidad', 'vacaciones', 'licencia', 'permiso', 'calamidad']
+  const NOVEDADES_AUSENCIA = ['incapacidad', 'vacaciones', 'licencia', 'permiso', 'calamidad', 'votación']
   const esAusenteT = t => t.novedad && NOVEDADES_AUSENCIA.some(a => t.novedad.toLowerCase().includes(a))
 
   const coberturaLineas = lineas.map(linea => {
