@@ -511,7 +511,12 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
   const [lchFin,    setLchFin]    = useState(turno.lunch_fin?.slice(0,5) || '')
   const [linea,     setLinea]     = useState(turno.linea_atencion || '')
   const [tipoT,     setTipoT]     = useState(turno.tipo_turno || '')
-  const [novedad,   setNovedad]   = useState(turno.novedad || '')
+  const [modalidad, setModalidad] = useState(turno.email || 'OFICINA')
+  const NOVEDAD_OPTS = ['Incapacidad', 'Vacaciones', 'Permiso médico', 'Calamidad', 'Licencia']
+  const novIni  = turno.novedad || ''
+  const novTipoIni  = NOVEDAD_OPTS.includes(novIni) ? novIni : (novIni ? 'Otro' : '')
+  const [novTipo,   setNovTipo]   = useState(novTipoIni)
+  const [novTexto,  setNovTexto]  = useState(novTipoIni === 'Otro' ? novIni : '')
   const [agente,    setAgente]    = useState(turno.agente || '')
   const [saving,    setSaving]    = useState(false)
   const [err,       setErr]       = useState(null)
@@ -522,6 +527,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
 
   async function guardar() {
     setSaving(true); setErr(null)
+    const novedadFinal = novTipo === 'Otro' ? novTexto.trim() : novTipo
     const campos = {
       turno_inicio:  descanso ? null : inicio  || null,
       turno_fin:     descanso ? null : fin     || null,
@@ -531,7 +537,8 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
       lunch_fin:     descanso ? null : lchFin  || null,
       linea_atencion: linea   || null,
       tipo_turno:    tipoT    || null,
-      novedad:       novedad  || null,
+      email:         descanso ? null : modalidad,
+      novedad:       novedadFinal || null,
     }
     try {
       const agenteNombre = isNuevo ? agente.trim() : turno.agente
@@ -641,6 +648,23 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
             </>
           )}
 
+          {/* Modalidad */}
+          {!descanso && (
+            <div>
+              <label className="text-xs font-medium text-gray-700 block mb-1.5">Modalidad</label>
+              <div className="flex gap-2">
+                <button type="button" onClick={() => setModalidad('OFICINA')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${modalidad === 'OFICINA' ? 'bg-blue-600 text-white border-blue-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                  🏢 Oficina
+                </button>
+                <button type="button" onClick={() => setModalidad('REMOTO')}
+                  className={`flex-1 py-2 rounded-lg text-sm font-medium border transition ${modalidad === 'REMOTO' ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-300 text-gray-600 hover:bg-gray-50'}`}>
+                  🏠 Remoto
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* Línea de atención */}
           <div>
             <label className="text-xs font-medium text-gray-700 block mb-1">
@@ -659,9 +683,17 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
             <label className="text-xs font-medium text-gray-700 block mb-1">
               Novedad <span className="text-gray-400 font-normal">(opcional)</span>
             </label>
-            <input type="text" value={novedad} onChange={e => setNovedad(e.target.value)}
-              placeholder="Ej: Incapacidad, Vacaciones, Permiso…"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"/>
+            <select value={novTipo} onChange={e => { setNovTipo(e.target.value); if (e.target.value !== 'Otro') setNovTexto('') }}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500">
+              <option value="">Sin novedad</option>
+              {NOVEDAD_OPTS.map(o => <option key={o} value={o}>{o}</option>)}
+              <option value="Otro">Otro…</option>
+            </select>
+            {novTipo === 'Otro' && (
+              <input type="text" value={novTexto} onChange={e => setNovTexto(e.target.value)}
+                placeholder="Describe la novedad"
+                className="mt-2 w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500"/>
+            )}
           </div>
 
           {err && <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</p>}
@@ -1689,13 +1721,18 @@ function BreaksMonitor() {
   const masTarde = eventos.filter(e => now < e.ini && (e.ini - now) * 60 > 90).sort((a,b) => a.ini - b.ini)
 
   // ── Cobertura en tiempo real por línea ───────────────────────────────────────
+  const NOVEDADES_AUSENCIA = ['incapacidad', 'vacaciones', 'licencia', 'permiso', 'calamidad']
+  const esAusenteT = t => t.novedad && NOVEDADES_AUSENCIA.some(a => t.novedad.toLowerCase().includes(a))
+
   const coberturaLineas = lineas.map(linea => {
     const agentesLinea = activos.filter(t => t.linea_atencion === linea)
     const enTurnoAhora = agentesLinea.filter(t => {
       const ini = toH(t.turno_inicio); const fin = toHEnd(t.turno_fin)
       return ini !== null && fin !== null && now >= ini && now <= fin
     })
-    const enBreakAhora = enTurnoAhora.filter(t => {
+    const ausentes    = enTurnoAhora.filter(esAusenteT)
+    const presentes   = enTurnoAhora.filter(t => !esAusenteT(t))
+    const enBreakAhora = presentes.filter(t => {
       const bIni = toH(t.break_inicio); const bFin = toH(t.break_fin)
       const lIni = toH(t.lunch_inicio); const lFin = toH(t.lunch_fin)
       return (bIni !== null && bFin !== null && now >= bIni && now <= bFin) ||
@@ -1703,11 +1740,12 @@ function BreaksMonitor() {
     })
     return {
       linea,
-      total:    enTurnoAhora.length,
+      total:    presentes.length,
       enBreak:  enBreakAhora.length,
-      activos:  enTurnoAhora.length - enBreakAhora.length,
+      activos:  presentes.length - enBreakAhora.length,
+      ausentes: ausentes.length,
     }
-  }).filter(r => r.total > 0)
+  }).filter(r => r.total > 0 || r.ausentes > 0)
 
   // ── Datos de pausas reales ───────────────────────────────────────────────────
   const activas    = pausas.filter(p => !p.fin_real)
@@ -1805,7 +1843,7 @@ function BreaksMonitor() {
       {/* Cobertura activa por línea */}
       {coberturaLineas.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {coberturaLineas.map(({ linea, total, enBreak, activos: act }) => {
+          {coberturaLineas.map(({ linea, total, enBreak, activos: act, ausentes }) => {
             const pct = total > 0 ? Math.round((act / total) * 100) : 0
             const selected = filtroLinea === linea
             const color = selected
@@ -1822,11 +1860,18 @@ function BreaksMonitor() {
                     <span className={`text-2xl font-bold tabular-nums ${textColor}`}>{act}</span>
                     <span className="text-xs text-gray-400 ml-1">/ {total}</span>
                   </div>
-                  {enBreak > 0 && (
-                    <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full font-medium">
-                      ☕ {enBreak} en break
-                    </span>
-                  )}
+                  <div className="flex flex-col items-end gap-1">
+                    {enBreak > 0 && (
+                      <span className="text-xs text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded-full font-medium">
+                        ☕ {enBreak} en break
+                      </span>
+                    )}
+                    {ausentes > 0 && (
+                      <span className="text-xs text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full font-medium">
+                        🚫 {ausentes} ausente{ausentes > 1 ? 's' : ''}
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className="h-1.5 bg-white/70 rounded-full overflow-hidden">
                   <div className={`h-full rounded-full transition-all duration-500 ${barColor}`} style={{ width: `${pct}%` }} />
@@ -2052,14 +2097,17 @@ function BreaksMonitor() {
             }).map(t => [t.agente, t])
           ).values()].sort((a, b) => (a.agente ?? '').localeCompare(b.agente ?? ''))
 
+          const presentes = agentesLinea.filter(t => !esAusenteT(t))
+          const ausentesL = agentesLinea.filter(esAusenteT)
+
           return (
             <div className="w-64 shrink-0 bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden sticky top-4">
               <div className="px-3 py-2.5 bg-primary-50 border-b border-primary-100 flex items-center justify-between">
                 <p className="text-xs font-semibold text-primary-700 truncate">{filtroLinea}</p>
-                <span className="text-xs text-primary-500 bg-primary-100 px-1.5 py-0.5 rounded-full">{agentesLinea.length}</span>
+                <span className="text-xs text-primary-500 bg-primary-100 px-1.5 py-0.5 rounded-full">{presentes.length}</span>
               </div>
               <div className="divide-y divide-gray-50 max-h-[70vh] overflow-y-auto">
-                {agentesLinea.map(t => {
+                {presentes.map(t => {
                   const bIni = toH(t.break_inicio); const bFin = toH(t.break_fin)
                   const lIni = toH(t.lunch_inicio); const lFin = toH(t.lunch_fin)
                   const enBreak =
@@ -2068,7 +2116,7 @@ function BreaksMonitor() {
                   const status = enBreak ? 'break' : 'activo'
                   return (
                     <div key={t.agente} className="px-3 py-2.5 flex items-center gap-2.5">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${status === 'activo' ? 'bg-green-500' : status === 'break' ? 'bg-amber-400' : 'bg-gray-300'}`} />
+                      <div className={`w-2 h-2 rounded-full shrink-0 ${status === 'activo' ? 'bg-green-500' : 'bg-amber-400'}`} />
                       <div className="flex-1 min-w-0">
                         <p className="text-xs font-medium text-gray-800 truncate">{t.agente?.split(' ').slice(0,2).join(' ')}</p>
                         <p className="text-[10px] text-gray-400">{fmtT(t.turno_inicio)}–{fmtT(t.turno_fin)}</p>
@@ -2079,6 +2127,23 @@ function BreaksMonitor() {
                     </div>
                   )
                 })}
+                {ausentesL.length > 0 && (
+                  <>
+                    <div className="px-3 py-1.5 bg-red-50">
+                      <p className="text-[10px] font-semibold text-red-500 uppercase tracking-wide">Ausentes</p>
+                    </div>
+                    {ausentesL.map(t => (
+                      <div key={t.agente} className="px-3 py-2.5 flex items-center gap-2.5 bg-red-50/40">
+                        <div className="w-2 h-2 rounded-full shrink-0 bg-red-400" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-gray-700 truncate">{t.agente?.split(' ').slice(0,2).join(' ')}</p>
+                          <p className="text-[10px] text-red-400">{t.novedad}</p>
+                        </div>
+                        <span className="text-[10px] font-semibold shrink-0 text-red-500">Ausente</span>
+                      </div>
+                    ))}
+                  </>
+                )}
               </div>
             </div>
           )
