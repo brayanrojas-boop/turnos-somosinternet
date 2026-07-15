@@ -1271,6 +1271,38 @@ export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre
   if (ae) throw new Error(ae.message)
 }
 
+// Intercambia TODAS las filas de dos fechas entre dos agentes (swap completo de descansos).
+// dateA = fecha de descanso de agenteA, dateB = fecha de descanso de agenteB.
+// Para cada fecha, reasigna los turnos de A→B y de B→A, evitando filas duplicadas.
+export async function intercambiarDescansosCompleto(agenteA, dateA, agenteB, dateB, supervisorNombre, motivo) {
+  const [
+    { data: rowsAenA }, { data: rowsBenA },
+    { data: rowsAenB }, { data: rowsBenB },
+  ] = await Promise.all([
+    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateA).ilike('agente', agenteA),
+    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateA).ilike('agente', agenteB),
+    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateB).ilike('agente', agenteA),
+    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateB).ilike('agente', agenteB),
+  ])
+  await Promise.all([
+    ...(rowsAenA ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteB }).eq('id', r.id)),
+    ...(rowsBenA ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteA }).eq('id', r.id)),
+    ...(rowsAenB ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteB }).eq('id', r.id)),
+    ...(rowsBenB ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteA }).eq('id', r.id)),
+  ])
+  const { error: ae } = await supabase.from('vip_cambios_turno').insert({
+    solicitante_nombre: agenteA,
+    receptor_nombre:    agenteB,
+    turno_sol_fecha:    dateA,
+    turno_rec_fecha:    dateB,
+    motivo:             motivo || null,
+    estado:             'aprobado',
+    aprobado_por:       supervisorNombre,
+    updated_at:         new Date().toISOString(),
+  })
+  if (ae) throw new Error(ae.message)
+}
+
 // ── Turno del analista hoy (para banner de aviso) ─────────────────────────
 export async function getMiTurnoHoyLinea(nombre, linea) {
   if (!nombre) return null

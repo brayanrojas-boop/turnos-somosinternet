@@ -7,7 +7,7 @@ import {
   responderSolicitudCambio, cancelarSolicitudCambio,
   getSolicitudesPendientesSupervisor, aprobarCambio,
   rechazarCambioSupervisor, aplicarCambioEnSheet, aplicarCambioEnSupabase,
-  intercambiarTurnosDirecto, importarTurnosDesdeSheet, getCambiosAprobadosRecientes,
+  intercambiarTurnosDirecto, intercambiarDescansosCompleto, importarTurnosDesdeSheet, getCambiosAprobadosRecientes,
   autoAplicarCambioAceptado, forzarAplicarCambioAceptado, getVipConfig, setVipConfig as saveVipConfig,
   autoDetectarNombreTurno, guardarNombreTurnoEnPerfil,
   reportarHorasExtra, getMisHorasExtra,
@@ -2398,6 +2398,27 @@ export default function VipMisTurnos() {
     } else if (gestionSel1.agente?.toLowerCase() === turno.agente?.toLowerCase()) {
       alert('No se puede intercambiar dos turnos del mismo analista.')
     } else {
+      const sel1EsDescanso = !gestionSel1.turno_inicio
+      if (sel1EsDescanso) {
+        // Buscar automáticamente el descanso del otro agente en la semana visible
+        const descansoB = turnosSemana.find(t =>
+          t.agente?.toLowerCase() === turno.agente?.toLowerCase() && !t.turno_inicio
+        )
+        if (descansoB && descansoB.fecha !== gestionSel1.fecha) {
+          // Intercambio completo: también se cruzan los turnos de trabajo de esas fechas
+          setGModal({
+            sel1: gestionSel1,
+            sel2: descansoB,
+            descansoCruzado: true,
+            agenteA: gestionSel1.agente,
+            agenteB: descansoB.agente,
+            descA: gestionSel1.fecha,
+            descB: descansoB.fecha,
+          })
+          setGS1(null); setGMotivo('')
+          return
+        }
+      }
       setGModal({ sel1: gestionSel1, sel2: turno })
       setGS1(null)
       setGMotivo('')
@@ -2426,7 +2447,15 @@ export default function VipMisTurnos() {
     setGG(true); setGExito(false); setGProg(5)
     try {
       setGProg(20)
-      await intercambiarTurnosDirecto(gestionModal.sel1, gestionModal.sel2, profile.full_name, gestionMotivo.trim())
+      if (gestionModal.descansoCruzado) {
+        await intercambiarDescansosCompleto(
+          gestionModal.agenteA, gestionModal.descA,
+          gestionModal.agenteB, gestionModal.descB,
+          profile.full_name, gestionMotivo.trim()
+        )
+      } else {
+        await intercambiarTurnosDirecto(gestionModal.sel1, gestionModal.sel2, profile.full_name, gestionMotivo.trim())
+      }
       setGProg(60)
       _sincSheet(gestionModal.sel1, gestionModal.sel2)
       await new Promise(r => setTimeout(r, 800))
@@ -3454,25 +3483,49 @@ export default function VipMisTurnos() {
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="font-semibold text-gray-900 flex items-center gap-2">
-                <ArrowLeftRight className="w-4 h-4 text-primary-600"/> Confirmar intercambio
+                <ArrowLeftRight className="w-4 h-4 text-primary-600"/>
+                {gestionModal.descansoCruzado ? 'Intercambio de descansos' : 'Confirmar intercambio'}
               </h3>
               <button onClick={() => setGModal(null)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5"/></button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              {[gestionModal.sel1, gestionModal.sel2].map((turno, i) => (
-                <div key={i} className={`rounded-xl border p-3 text-xs space-y-0.5 ${i === 0 ? 'border-blue-200 bg-blue-50' : 'border-purple-200 bg-purple-50'}`}>
-                  <p className={`font-bold text-sm ${i === 0 ? 'text-blue-800' : 'text-purple-800'}`}>{turno.agente}</p>
-                  <p className="text-gray-600">{formatFecha(turno.fecha)}</p>
-                  <p className="text-gray-600">{formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}</p>
-                  {turno.linea_atencion && <p className="text-gray-400">{turno.linea_atencion}</p>}
+            {gestionModal.descansoCruzado ? (
+              <>
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 space-y-1">
+                  <p className="font-semibold">🔄 Intercambio completo de días de descanso</p>
+                  <p>Se intercambiarán <strong>todos los turnos</strong> de ambas fechas entre los dos analistas:</p>
                 </div>
-              ))}
-            </div>
-
-            <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-              <ArrowLeftRight className="w-3.5 h-3.5"/> Los agentes quedarán intercambiados en esas fechas
-            </div>
+                <div className="grid grid-cols-2 gap-3">
+                  {[
+                    { agente: gestionModal.agenteA, fecha: gestionModal.descA, label: 'Descansa actualmente' },
+                    { agente: gestionModal.agenteB, fecha: gestionModal.descB, label: 'Descansa actualmente' },
+                  ].map((item, i) => (
+                    <div key={i} className={`rounded-xl border p-3 text-xs space-y-0.5 ${i === 0 ? 'border-blue-200 bg-blue-50' : 'border-purple-200 bg-purple-50'}`}>
+                      <p className={`font-bold text-sm ${i === 0 ? 'text-blue-800' : 'text-purple-800'}`}>{item.agente}</p>
+                      <p className="text-gray-500 text-[10px]">{item.label}</p>
+                      <p className="text-gray-600">{formatFecha(item.fecha)}</p>
+                      <p className="font-medium mt-1 text-[10px] text-gray-500">→ descansará el {formatFecha(i === 0 ? gestionModal.descB : gestionModal.descA)}</p>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-3">
+                  {[gestionModal.sel1, gestionModal.sel2].map((turno, i) => (
+                    <div key={i} className={`rounded-xl border p-3 text-xs space-y-0.5 ${i === 0 ? 'border-blue-200 bg-blue-50' : 'border-purple-200 bg-purple-50'}`}>
+                      <p className={`font-bold text-sm ${i === 0 ? 'text-blue-800' : 'text-purple-800'}`}>{turno.agente}</p>
+                      <p className="text-gray-600">{formatFecha(turno.fecha)}</p>
+                      <p className="text-gray-600">{formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}</p>
+                      {turno.linea_atencion && <p className="text-gray-400">{turno.linea_atencion}</p>}
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+                  <ArrowLeftRight className="w-3.5 h-3.5"/> Los agentes quedarán intercambiados en esas fechas
+                </div>
+              </>
+            )}
 
             {gestionExito ? (
               <div className="flex flex-col items-center gap-2 py-2">
