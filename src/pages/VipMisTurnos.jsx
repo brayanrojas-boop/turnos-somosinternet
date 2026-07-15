@@ -1222,7 +1222,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                               {formatH(turno.turno_inicio)}–{formatH(turno.turno_fin)}
                             </p>
                             {turno.email && (turno.email.toLowerCase().includes('remot') || turno.email.toLowerCase().includes('teletrabajo') || turno.email.toLowerCase().includes('casa')) && (
-                              <span title="Remoto" className="text-[10px] leading-none">🏠</span>
+                              <span title="Remoto" className="text-[9px] leading-none">🏠</span>
                             )}
                           </div>
                           {turno.linea_atencion && (
@@ -1388,6 +1388,12 @@ function CalendarioMes({ nombre, onNavegar }) {
                     <p className="text-[8px] leading-none mt-0.5" style={{ color: color.bg + 'bb' }}>
                       {turno.turno_fin?.slice(0, 5)}
                     </p>
+                    {turno.email && (turno.email.toLowerCase().includes('remot') || turno.email.toLowerCase().includes('teletrabajo')) && (
+                      <p className="text-[8px] mt-0.5 leading-none text-blue-600">🏠 Remoto</p>
+                    )}
+                    {turno.novedad && (
+                      <p className="text-[8px] mt-0.5 leading-none text-amber-600 truncate">{turno.novedad}</p>
+                    )}
                   </div>
                 )}
               </button>

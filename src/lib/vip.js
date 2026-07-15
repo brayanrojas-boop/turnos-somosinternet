@@ -1488,7 +1488,7 @@ export async function upsertWFMInteracciones(rows) {
 export async function getTurnosMesAnalista(nombre, inicio, fin) {
   const { data, error } = await supabase
     .from('vip_turnos_programados')
-    .select('fecha, turno_inicio, turno_fin, linea_atencion')
+    .select('fecha, turno_inicio, turno_fin, linea_atencion, email, novedad')
     .ilike('agente', nombre)
     .gte('fecha', inicio)
     .lte('fecha', fin)
