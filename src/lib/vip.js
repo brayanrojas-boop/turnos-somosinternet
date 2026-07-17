@@ -896,6 +896,7 @@ export async function getTurnosSemana(inicio, fin) {
     .not('agente', 'is', null)
     .order('fecha')
     .order('turno_inicio', { nullsFirst: false })
+    .limit(5000)
   const raw = data ?? []
   const visto = new Set()
   return raw.filter(t => {
@@ -915,6 +916,7 @@ export async function getTurnosFuturos() {
     .not('turno_inicio', 'is', null)
     .order('fecha')
     .order('agente')
+    .limit(5000)
   const raw = data ?? []
   const visto = new Set()
   return raw.filter(t => {
