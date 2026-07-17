@@ -14,7 +14,7 @@ import {
   actualizarTurnoProgramado, crearTurnoProgramado,
   sincronizarTurnoEnSheet,
   iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy, getPausasHoyTodos,
-  registrarSlackIdAutomatico,
+  registrarSlackIdAutomatico, suscribirSolicitudesCambio,
 } from '../lib/vip'
 import {
   Calendar, ArrowLeftRight, CheckCircle, XCircle, AlertTriangle,
@@ -913,6 +913,9 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
   const [elapsed,     setElapsed]     = useState(0)
   const [loading,     setLoading]     = useState(false)
   const [iniciando,   setIniciando]   = useState(null)
+  const [inAppAlert,  setInAppAlert]  = useState(null)
+  const notifEndSentRef      = useRef(false)
+  const notifReminderSentRef = useRef({ break: false, almuerzo: false })
 
   function toMin(t) {
     if (!t) return null
@@ -933,14 +936,65 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
 
   useEffect(() => { if (nombreEfectivo) cargar() }, [nombreEfectivo])
 
-  // Contador en vivo mientras hay pausa activa
+  // Pedir permiso de notificaciones al montar
+  useEffect(() => {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+  }, [])
+
+  // Auto-dismiss del toast en-app
+  useEffect(() => {
+    if (!inAppAlert) return
+    const id = setTimeout(() => setInAppAlert(null), 12_000)
+    return () => clearInterval(id)
+  }, [inAppAlert])
+
+  // Resetear flag de notificación al cambiar de pausa
+  useEffect(() => { notifEndSentRef.current = false }, [pausaActiva?.id])
+
+  // Contador en vivo + notificación al cumplirse el tiempo
   useEffect(() => {
     if (!pausaActiva) { setElapsed(0); return }
-    const tick = () => setElapsed(Math.floor((Date.now() - new Date(pausaActiva.inicio_real).getTime()) / 1000))
+    const ps = pausaActiva.duracion_prog ? pausaActiva.duracion_prog * 60 : null
+    const tick = () => {
+      const newElapsed = Math.floor((Date.now() - new Date(pausaActiva.inicio_real).getTime()) / 1000)
+      setElapsed(newElapsed)
+      if (ps && newElapsed >= ps && !notifEndSentRef.current) {
+        notifEndSentRef.current = true
+        const label = pausaActiva.tipo === 'break' ? 'pausa' : 'almuerzo'
+        sendNotif(`⏰ Tiempo de ${label} cumplido`, 'Recuerda finalizar tu pausa.')
+        showAlert(`⏰ Tu tiempo de ${label} se cumplió. ¡Recuerda finalizarla!`, 'red')
+      }
+    }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
   }, [pausaActiva])
+
+  // Recordatorio 10 min antes del break/almuerzo programado
+  useEffect(() => {
+    if (!turnoHoy) return
+    function checkReminder() {
+      const now = new Date()
+      const nowMin = now.getHours() * 60 + now.getMinutes()
+      const check = (tipo, ini, label, emoji) => {
+        const iniMin = toMin(ini)
+        if (!iniMin) return
+        const diff = iniMin - nowMin
+        if (diff > 0 && diff <= 10 && !notifReminderSentRef.current[tipo]) {
+          notifReminderSentRef.current[tipo] = true
+          sendNotif(`${emoji} Tu ${label} en ${diff} min`, `Recuerda sacar tu ${label} programado a las ${ini}.`)
+          showAlert(`${emoji} Recuerda: tu ${label} comienza en ${diff} minuto${diff !== 1 ? 's' : ''}`, 'orange')
+        }
+      }
+      check('break',   turnoHoy.break_inicio,  'pausa',    '☕')
+      check('almuerzo', turnoHoy.lunch_inicio, 'almuerzo', '🍽️')
+    }
+    checkReminder()
+    const id = setInterval(checkReminder, 30_000)
+    return () => clearInterval(id)
+  }, [turnoHoy])
 
   async function handleIniciar(tipo) {
     setIniciando(tipo)
@@ -971,6 +1025,12 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
   function fmtHm(iso) {
     return new Date(iso).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
   }
+  function sendNotif(title, body) {
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification(title, { body })
+    }
+  }
+  function showAlert(msg, color) { setInAppAlert({ msg, color }) }
 
   const pausada = Boolean(pausaActiva)
   const progSeg = pausaActiva?.duracion_prog ? pausaActiva.duracion_prog * 60 : null
@@ -1057,6 +1117,17 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Toast de alerta fijo en pantalla */}
+      {inAppAlert && (
+        <div className={`fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl text-white font-semibold text-sm max-w-sm w-[calc(100%-2rem)] ${inAppAlert.color === 'red' ? 'bg-red-500' : 'bg-orange-500'}`}
+          style={{ animation: 'slideDownFade 0.35s ease' }}>
+          <span className="flex-1 leading-snug">{inAppAlert.msg}</span>
+          <button onClick={() => setInAppAlert(null)} className="opacity-70 hover:opacity-100 shrink-0">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>
@@ -2300,6 +2371,32 @@ export default function VipMisTurnos() {
       registrarSlackIdAutomatico(nombreEfectivo, user.email).catch(() => {})
     }
   }, [nombreEfectivo, user?.email])
+
+  // Alerta in-app para solicitudes de cambio de turno
+  const [cambioAlert, setCambioAlert] = useState(null)
+  useEffect(() => {
+    if (!cambioAlert) return
+    const id = setTimeout(() => setCambioAlert(null), 14_000)
+    return () => clearTimeout(id)
+  }, [cambioAlert])
+
+  // Suscripción Realtime: notificar cuando alguien envía una solicitud de cambio
+  useEffect(() => {
+    if (!nombreEfectivo) return
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission()
+    }
+    const unsub = suscribirSolicitudesCambio(nombreEfectivo, (solicitud) => {
+      const solicitante = solicitud.solicitante_nombre || 'Un compañero'
+      const msg = `${solicitante} te envió una solicitud de cambio de turno`
+      if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification('🔄 Solicitud de cambio de turno', { body: msg })
+      }
+      setCambioAlert(msg)
+      cargar()
+    })
+    return unsub
+  }, [nombreEfectivo])
 
   // Vista semana / día
   const [vistaMode, setVistaMode] = useState('semana')
@@ -3607,6 +3704,19 @@ export default function VipMisTurnos() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Toast: nueva solicitud de cambio de turno recibida */}
+      {cambioAlert && (
+        <div className="fixed top-5 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-3 px-5 py-3.5 rounded-2xl shadow-2xl bg-primary-600 text-white font-semibold text-sm max-w-sm w-[calc(100%-2rem)]"
+          style={{ animation: 'slideDownFade 0.35s ease' }}>
+          <ArrowLeftRight className="w-5 h-5 shrink-0" />
+          <span className="flex-1 leading-snug">{cambioAlert}</span>
+          <button onClick={() => { setCambioAlert(null); setTab('solicitudes') }} className="opacity-70 hover:opacity-100 shrink-0 text-xs underline">Ver</button>
+          <button onClick={() => setCambioAlert(null)} className="opacity-70 hover:opacity-100 shrink-0">
+            <X className="w-4 h-4" />
+          </button>
         </div>
       )}
     </div>

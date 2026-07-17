@@ -740,6 +740,17 @@ export function suscribirNotificaciones(usuarioId, callback) {
   return () => supabase.removeChannel(channel)
 }
 
+export function suscribirSolicitudesCambio(nombre, callback) {
+  const channel = supabase
+    .channel(`cambios-${nombre}`)
+    .on('postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'vip_cambios_turno', filter: `receptor_nombre=eq.${nombre}` },
+      payload => callback(payload.new)
+    )
+    .subscribe()
+  return () => supabase.removeChannel(channel)
+}
+
 // ── Reporte completo ──────────────────────────────────────────────────────
 function isoLocalDia(fechaStr, fin = false) {
   const offsetMin = new Date().getTimezoneOffset()
