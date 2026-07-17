@@ -362,8 +362,15 @@ export async function importarTurnosDesdeSheet(url) {
 
   if (registros.length === 0) throw new Error('No se encontraron filas con datos válidos.')
 
+  // Deduplicar: si el sheet tiene filas repetidas para el mismo (agente, fecha) quedarse con la última
+  const vistoReg = new Map()
+  for (const r of registros) {
+    if (r.agente && r.fecha) vistoReg.set(`${r.agente}|${r.fecha}`, r)
+  }
+  const registrosDedup = [...vistoReg.values()]
+
   // Re-import idempotente: borra fechas existentes antes de insertar
-  const fechas = [...new Set(registros.map(r => r.fecha).filter(Boolean))]
+  const fechas = [...new Set(registrosDedup.map(r => r.fecha).filter(Boolean))]
   if (fechas.length > 0) {
     // Borrar en lotes para evitar límite de PostgREST con muchas fechas
     const CHUNK_DEL = 100
@@ -379,12 +386,12 @@ export async function importarTurnosDesdeSheet(url) {
   // Insertar en lotes de 500 para respetar el límite de PostgREST
   const CHUNK = 500
   let insertados = 0
-  for (let i = 0; i < registros.length; i += CHUNK) {
+  for (let i = 0; i < registrosDedup.length; i += CHUNK) {
     const { error } = await supabase
       .from('vip_turnos_programados')
-      .insert(registros.slice(i, i + CHUNK))
+      .insert(registrosDedup.slice(i, i + CHUNK))
     if (error) throw new Error(error.message)
-    insertados += Math.min(CHUNK, registros.length - i)
+    insertados += Math.min(CHUNK, registrosDedup.length - i)
   }
 
   return insertados
@@ -848,7 +855,13 @@ export async function getMisTurnos(nombre) {
     .ilike('agente', nombre)
     .gte('fecha', hoyISO())
     .order('fecha')
-  return data ?? []
+  const raw = data ?? []
+  const visto = new Set()
+  return raw.filter(t => {
+    if (visto.has(t.fecha)) return false
+    visto.add(t.fecha)
+    return true
+  })
 }
 
 export async function getTurnosAnalista(nombre, desde, hasta) {
@@ -883,7 +896,14 @@ export async function getTurnosSemana(inicio, fin) {
     .not('agente', 'is', null)
     .order('fecha')
     .order('turno_inicio', { nullsFirst: false })
-  return data ?? []
+  const raw = data ?? []
+  const visto = new Set()
+  return raw.filter(t => {
+    const k = `${t.agente}|${t.fecha}`
+    if (visto.has(k)) return false
+    visto.add(k)
+    return true
+  })
 }
 
 export async function getTurnosFuturos() {
@@ -895,7 +915,14 @@ export async function getTurnosFuturos() {
     .not('turno_inicio', 'is', null)
     .order('fecha')
     .order('agente')
-  return data ?? []
+  const raw = data ?? []
+  const visto = new Set()
+  return raw.filter(t => {
+    const k = `${t.agente}|${t.fecha}`
+    if (visto.has(k)) return false
+    visto.add(k)
+    return true
+  })
 }
 
 export async function crearSolicitudCambio({ solicitanteNombre, receptorNombre, turnoSol, turnoRec, motivo }) {
