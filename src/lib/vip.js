@@ -1555,8 +1555,15 @@ export async function getTurnosMesAnalista(nombre, inicio, fin) {
     .gte('fecha', inicio)
     .lte('fecha', fin)
     .order('fecha')
+    .order('turno_inicio', { nullsFirst: false })
   if (error) throw new Error(error.message)
-  return data ?? []
+  const raw = data ?? []
+  const visto = new Set()
+  return raw.filter(t => {
+    if (visto.has(t.fecha)) return false
+    visto.add(t.fecha)
+    return true
+  })
 }
 
 // Analistas únicos con turnos recientes para una línea (últimos 28 días)
