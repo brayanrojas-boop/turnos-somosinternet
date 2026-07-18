@@ -1844,6 +1844,7 @@ function BreaksMonitor() {
   const enCurso  = eventos.filter(e => now >= e.ini && now <= e.fin).sort((a,b) => a.fin - b.fin)
   const proximos = eventos.filter(e => now < e.ini && (e.ini - now) * 60 <= 90).sort((a,b) => a.ini - b.ini)
   const masTarde = eventos.filter(e => now < e.ini && (e.ini - now) * 60 > 90).sort((a,b) => a.ini - b.ini)
+  const pasados  = eventos.filter(e => now > e.fin).sort((a,b) => b.fin - a.fin)
 
   // ── Cobertura en tiempo real por línea ───────────────────────────────────────
   const NOVEDADES_AUSENCIA = ['incapacidad', 'vacaciones', 'licencia', 'permiso', 'calamidad', 'votación']
@@ -2074,6 +2075,12 @@ function BreaksMonitor() {
             <div>
               <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Más tarde</p>
               <div className="space-y-1">{masTarde.map(e => <EventRow key={e.key} e={e} variante="tarde" />)}</div>
+            </div>
+          )}
+          {pasados.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">Ya ocurrieron · {pasados.length}</p>
+              <div className="space-y-1 opacity-60">{pasados.map(e => <EventRow key={e.key} e={e} variante="pasado" />)}</div>
             </div>
           )}
           {eventos.length === 0 && (
