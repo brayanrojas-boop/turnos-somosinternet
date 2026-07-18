@@ -1230,18 +1230,29 @@ export async function rechazarCambioSupervisor(id, supervisorNombre, motivo) {
 }
 
 export async function aplicarCambioEnSheet(url, secret, cambio) {
-  const res = await fetch(url, {
-    method: 'POST',
-    redirect: 'follow',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({
-      secret,
-      agente1: cambio.solicitante_nombre,
-      fecha1: cambio.turno_sol_fecha,
-      agente2: cambio.receptor_nombre,
-      fecha2: cambio.turno_rec_fecha,
-    }),
-  })
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 15_000)
+  let res
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        secret,
+        agente1: cambio.solicitante_nombre,
+        fecha1: cambio.turno_sol_fecha,
+        agente2: cambio.receptor_nombre,
+        fecha2: cambio.turno_rec_fecha,
+      }),
+    })
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('El script no respondió en 15 s. Verifica la URL Web App.')
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
   // Google Apps Script redirige por CORS — si respondió con 200 el script ejecutó OK.
   // Intentamos leer JSON pero si falla (respuesta opaca/HTML) lo consideramos éxito
   // porque los logs de Apps Script confirman que doPost se ejecuta correctamente.
