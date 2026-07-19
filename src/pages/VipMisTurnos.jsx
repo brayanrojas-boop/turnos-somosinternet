@@ -2419,6 +2419,7 @@ export default function VipMisTurnos() {
   const tieneRango = !!(filtroDesde || filtroHasta)
 
   const cargandoRef = useRef(false)
+  const hoyMallaRef = useRef(null)
   const cargar = useCallback(async () => {
     if (cargandoRef.current) return
     cargandoRef.current = true
@@ -2711,6 +2712,15 @@ export default function VipMisTurnos() {
 
   function limpiarRango() { setFD(''); setFH('') }
 
+  function irAHoy() {
+    if (offset !== 0) {
+      setOffset(0)
+      setTimeout(() => hoyMallaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+    } else {
+      hoyMallaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }
+  }
+
   async function handleImportar() {
     const url = sheetImportUrl.trim()
     if (!url) { setShowConfig(true); return }
@@ -2952,7 +2962,17 @@ export default function VipMisTurnos() {
           {tab === 'malla' && (
             <div className="space-y-4">
               {/* Navegador de semana — solo cuando no hay rango activo */}
-              {!tieneRango && <NavSemana offset={offset} onChange={setOffset}/>}
+              {!tieneRango && (
+                <div className="flex items-center gap-2">
+                  <div className="flex-1"><NavSemana offset={offset} onChange={setOffset}/></div>
+                  <button
+                    onClick={irAHoy}
+                    className="shrink-0 px-3 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition"
+                  >
+                    Hoy
+                  </button>
+                </div>
+              )}
 
               {/* Filtros */}
               <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3">
@@ -3049,7 +3069,7 @@ export default function VipMisTurnos() {
                   const d    = new Date(fecha + 'T12:00:00')
                   const label = `${DIAS[d.getDay()]} ${d.getDate()} ${MESES[d.getMonth()]}`
                   return (
-                    <div key={fecha} className={`rounded-xl border overflow-hidden ${hoy ? 'border-primary-300' : 'border-gray-200'}`}>
+                    <div key={fecha} ref={hoy ? hoyMallaRef : null} className={`rounded-xl border overflow-hidden ${hoy ? 'border-primary-300' : 'border-gray-200'}`}>
                       <div className={`px-4 py-2 flex items-center justify-between ${hoy ? 'bg-primary-50' : 'bg-gray-50'}`}>
                         <p className={`text-sm font-semibold ${hoy ? 'text-primary-700' : 'text-gray-600'}`}>
                           {label}
