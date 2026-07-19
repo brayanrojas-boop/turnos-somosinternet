@@ -2420,6 +2420,7 @@ export default function VipMisTurnos() {
 
   const cargandoRef = useRef(false)
   const hoyMallaRef = useRef(null)
+  const [soloHoy, setSoloHoy] = useState(false)
   const cargar = useCallback(async () => {
     if (cargandoRef.current) return
     cargandoRef.current = true
@@ -2462,6 +2463,7 @@ export default function VipMisTurnos() {
 
   // Fechas visibles en la malla: todos los días de la semana / rango seleccionado
   const diasVisibles = (() => {
+    if (soloHoy) return [localDateISO()]
     if (tieneRango) {
       const inicio = filtroDesde || toISO(lunes)
       const fin    = filtroHasta || toISO(domingo)
@@ -2713,11 +2715,11 @@ export default function VipMisTurnos() {
   function limpiarRango() { setFD(''); setFH('') }
 
   function irAHoy() {
-    if (offset !== 0) {
-      setOffset(0)
-      setTimeout(() => hoyMallaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 120)
+    if (soloHoy) {
+      setSoloHoy(false)
     } else {
-      hoyMallaRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      setOffset(0)
+      setSoloHoy(true)
     }
   }
 
@@ -2961,13 +2963,18 @@ export default function VipMisTurnos() {
           {/* ── MALLA COMPLETA ── */}
           {tab === 'malla' && (
             <div className="space-y-4">
-              {/* Navegador de semana — solo cuando no hay rango activo */}
+              {/* Navegador de semana — solo cuando no hay rango activo ni filtro de hoy */}
               {!tieneRango && (
                 <div className="flex items-center gap-2">
-                  <div className="flex-1"><NavSemana offset={offset} onChange={setOffset}/></div>
+                  {!soloHoy && <div className="flex-1"><NavSemana offset={offset} onChange={setOffset}/></div>}
+                  {soloHoy && <div className="flex-1"/>}
                   <button
                     onClick={irAHoy}
-                    className="shrink-0 px-3 py-2 text-xs font-semibold bg-primary-600 hover:bg-primary-700 text-white rounded-xl transition"
+                    className={`shrink-0 px-3 py-2 text-xs font-semibold rounded-xl border transition ${
+                      soloHoy
+                        ? 'bg-primary-600 border-primary-600 text-white hover:bg-primary-700'
+                        : 'bg-white border-gray-300 text-gray-700 hover:bg-gray-50'
+                    }`}
                   >
                     Hoy
                   </button>
