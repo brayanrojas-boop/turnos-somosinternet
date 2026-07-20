@@ -2545,7 +2545,12 @@ export default function VipMisTurnos() {
         turno_rec_fecha:    turno2.fecha,
       })
     } catch (e) {
-      alert(`⚠️ El cambio se guardó en la base de datos, pero NO se actualizó el Google Sheet.\n\nError: ${e.message}\n\nVerifica la URL Web App y el secret en ⚙️ Configuración.`)
+      const esTimeout = /no respondió/i.test(e.message)
+      if (esTimeout) {
+        alert(`⏳ El cambio se guardó en la base de datos.\n\n${e.message}`)
+      } else {
+        alert(`⚠️ El cambio se guardó en la base de datos, pero NO se actualizó el Google Sheet.\n\nError: ${e.message}\n\nVerifica la URL Web App y el secret en ⚙️ Configuración.`)
+      }
     }
   }
 

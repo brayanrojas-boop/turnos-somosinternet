@@ -1231,7 +1231,7 @@ export async function rechazarCambioSupervisor(id, supervisorNombre, motivo) {
 
 export async function aplicarCambioEnSheet(url, secret, cambio) {
   const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), 15_000)
+  const timer = setTimeout(() => ctrl.abort(), 40_000)
   let res
   try {
     res = await fetch(url, {
@@ -1248,7 +1248,9 @@ export async function aplicarCambioEnSheet(url, secret, cambio) {
       }),
     })
   } catch (e) {
-    if (e.name === 'AbortError') throw new Error('El script no respondió en 15 s. Verifica la URL Web App.')
+    // El abort solo cancela la espera del navegador: Apps Script puede seguir
+    // ejecutando doPost del lado del servidor y aplicar el cambio igualmente.
+    if (e.name === 'AbortError') throw new Error('El script no respondió en 40 s, pero puede que el cambio se aplique igual en unos minutos. Si no aparece en el Sheet, verifica la URL Web App.')
     throw e
   } finally {
     clearTimeout(timer)
