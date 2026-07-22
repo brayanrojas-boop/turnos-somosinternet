@@ -3516,9 +3516,9 @@ export default function VipMisTurnos() {
               {diasSemana.map(fecha => {
                 const turnos = gestionPorFecha[fecha] ?? []
                 if (!turnos.length) return null
-                // Gestión directa es solo para admin/supervisor: se permite elegir también turnos
-                // ya pasados para registrar cambios retroactivos (el intercambio queda aprobado directo).
-                const esFuturo = true
+                // Solo el rol admin (no supervisor) puede elegir turnos ya pasados,
+                // para registrar cambios retroactivos.
+                const esFuturo = profile?.role === 'admin' ? true : (fecha >= hoyStr)
                 return (
                   <div key={fecha}>
                     <p className={`text-xs font-semibold uppercase tracking-wide mb-2 ${esHoy(fecha) ? 'text-primary-700' : 'text-gray-400'}`}>
