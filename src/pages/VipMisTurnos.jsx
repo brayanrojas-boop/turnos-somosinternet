@@ -1718,12 +1718,14 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
                   )}
                   {/* Pausa */}
                   {bIni !== null && bFin !== null && (
-                    <div className={`absolute top-0 h-full rounded ${estado === 'en_pausa' ? 'bg-amber-500' : 'bg-amber-400/80'}`}
+                    <div className={`absolute top-0 h-full rounded cursor-help ${estado === 'en_pausa' ? 'bg-amber-500' : 'bg-amber-400/80'}`}
+                      title={`Pausa: ${formatH(t.break_inicio)}–${formatH(t.break_fin)}`}
                       style={{ left: pctLeft(bIni), width: pctWidth(bIni, bFin) }} />
                   )}
                   {/* Almuerzo */}
                   {lIni !== null && lFin !== null && (
-                    <div className={`absolute top-0 h-full rounded ${estado === 'en_almuerzo' ? 'bg-teal-500' : 'bg-emerald-400/80'}`}
+                    <div className={`absolute top-0 h-full rounded cursor-help ${estado === 'en_almuerzo' ? 'bg-teal-500' : 'bg-emerald-400/80'}`}
+                      title={`Almuerzo: ${formatH(t.lunch_inicio)}–${formatH(t.lunch_fin)}`}
                       style={{ left: pctLeft(lIni), width: pctWidth(lIni, lFin) }} />
                   )}
                 </div>
@@ -3128,7 +3130,16 @@ export default function VipMisTurnos() {
                                   <div className="flex items-center gap-2 shrink-0">
                                     {esDescanso(turno)
                                       ? <span className="text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">Descanso</span>
-                                      : <span className={`text-xs tabular-nums ${esMio ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>{formatH(turno.turno_inicio)} – {formatH(turno.turno_fin)}</span>
+                                      : <div className="text-right">
+                                          <span className={`text-xs tabular-nums block ${esMio ? 'text-primary-700 font-medium' : 'text-gray-500'}`}>{formatH(turno.turno_inicio)} – {formatH(turno.turno_fin)}</span>
+                                          {(turno.break_inicio || turno.lunch_inicio) && (
+                                            <span className="text-[10px] text-gray-400 tabular-nums block leading-tight">
+                                              {turno.break_inicio && <>☕ {formatH(turno.break_inicio)}–{formatH(turno.break_fin)}</>}
+                                              {turno.break_inicio && turno.lunch_inicio && '  '}
+                                              {turno.lunch_inicio && <>🍽️ {formatH(turno.lunch_inicio)}–{formatH(turno.lunch_fin)}</>}
+                                            </span>
+                                          )}
+                                        </div>
                                     }
                                     {!esMio && futuro && (
                                       bloq
