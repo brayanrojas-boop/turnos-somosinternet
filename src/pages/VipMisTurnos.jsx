@@ -2292,7 +2292,6 @@ export default function VipMisTurnos() {
   const { profile, user } = useAuth()
   const { t } = useTranslation()
   const esAdmin = ['admin','supervisor'].includes(profile?.role)
-  const esPropietario = user?.email === 'brayan.rojas@somosinternet.co'
 
   const [tab, setTab]           = useState('mis-turnos')
   const [offset, setOffset]     = useState(0)
@@ -2771,7 +2770,7 @@ export default function VipMisTurnos() {
           </p>
         </div>
         <div className="flex gap-2">
-          {esAdmin && esPropietario && (
+          {esAdmin && (
             <button onClick={handleImportar} disabled={importando}
               title="Sincronizar turnos desde Google Sheet"
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-green-700 bg-green-50 hover:bg-green-100 border border-green-200 rounded-lg disabled:opacity-50 transition">
