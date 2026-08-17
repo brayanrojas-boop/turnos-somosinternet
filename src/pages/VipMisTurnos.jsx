@@ -28,6 +28,18 @@ const SCRIPT_SECRET_KEY = 'vip_script_secret'
 const NOMBRE_TURNO_KEY  = 'vip_nombre_turno'
 const SHEET_IMPORT_KEY  = 'vip_sheet_import_url'
 
+// El cambio ya quedó guardado en Supabase para cuando esto se llama — este aviso es
+// solo para que el Sheet (que puede fallar por config, timeout o error del Apps Script)
+// no quede desactualizado en silencio sin que nadie se entere.
+function avisarFalloSheet(e) {
+  const esTimeout = /no respondió/i.test(e?.message ?? '')
+  if (esTimeout) {
+    alert(`⏳ El cambio se guardó en la base de datos.\n\n${e.message}`)
+  } else {
+    alert(`⚠️ El cambio se guardó en la base de datos, pero NO se actualizó el Google Sheet.\n\nError: ${e?.message ?? 'desconocido'}\n\nVerifica la URL Web App y el secret en ⚙️ Configuración.`)
+  }
+}
+
 const MESES = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic']
 const DIAS  = ['Domingo','Lunes','Martes','Miércoles','Jueves','Viernes','Sábado']
 
@@ -585,7 +597,7 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
           lunch_inicio: descanso ? null : dt(lchIni),
           lunch_fin:    descanso ? null : dt(lchFin),
         }
-        sincronizarTurnoEnSheet(scriptUrl.trim(), scriptSecret.trim(), agenteNombre, turno.fecha, camposSheet).catch(() => {})
+        sincronizarTurnoEnSheet(scriptUrl.trim(), scriptSecret.trim(), agenteNombre, turno.fecha, camposSheet).catch(avisarFalloSheet)
       }
       onGuardado()
     } catch (e) { setErr(e.message) }
@@ -2546,12 +2558,7 @@ export default function VipMisTurnos() {
         turno_rec_fecha:    turno2.fecha,
       })
     } catch (e) {
-      const esTimeout = /no respondió/i.test(e.message)
-      if (esTimeout) {
-        alert(`⏳ El cambio se guardó en la base de datos.\n\n${e.message}`)
-      } else {
-        alert(`⚠️ El cambio se guardó en la base de datos, pero NO se actualizó el Google Sheet.\n\nError: ${e.message}\n\nVerifica la URL Web App y el secret en ⚙️ Configuración.`)
-      }
+      avisarFalloSheet(e)
     }
   }
 
@@ -2648,7 +2655,7 @@ export default function VipMisTurnos() {
       setRProg(70)
       if (resultado.ok) {
         if (scriptUrl.trim() && scriptSecret.trim()) {
-          aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), resultado.cambio).catch(() => {})
+          aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), resultado.cambio).catch(avisarFalloSheet)
         }
         setRProg(100)
         setRExito(true)
@@ -2665,7 +2672,7 @@ export default function VipMisTurnos() {
           const forzado = await forzarAplicarCambioAceptado(id)
           if (forzado.ok) {
             if (scriptUrl.trim() && scriptSecret.trim()) {
-              aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), forzado.cambio).catch(() => {})
+              aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), forzado.cambio).catch(avisarFalloSheet)
             }
             setRProg(100); setRExito(true)
             await cargar()
@@ -2704,7 +2711,7 @@ export default function VipMisTurnos() {
       await aplicarCambioEnSupabase(cambio)
       await aprobarCambio(cambio.id, profile.full_name)
       if (scriptUrl.trim() && scriptSecret.trim()) {
-        try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), cambio) } catch {}
+        try { await aplicarCambioEnSheet(scriptUrl.trim(), scriptSecret.trim(), cambio) } catch (e) { avisarFalloSheet(e) }
       }
       await cargar()
     } catch (e) { alert('Error al aprobar: ' + e.message) }
