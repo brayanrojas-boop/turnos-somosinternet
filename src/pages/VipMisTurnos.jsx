@@ -12,7 +12,7 @@ import {
   autoDetectarNombreTurno, guardarNombreTurnoEnPerfil,
   reportarHorasExtra, getMisHorasExtra,
   actualizarTurnoProgramado, crearTurnoProgramado,
-  sincronizarTurnoEnSheet,
+  sincronizarTurnoEnSheet, getTodosLosTurnosParaResync,
   iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy, getPausasHoyTodos,
   registrarSlackIdAutomatico, suscribirSolicitudesCambio,
 } from '../lib/vip'
@@ -2369,6 +2369,9 @@ export default function VipMisTurnos() {
   const [sheetImportUrl, setSheetImportUrl] = useState(() => localStorage.getItem(SHEET_IMPORT_KEY) ?? '')
   const [importando, setImportando]         = useState(false)
   const [importMsg, setImportMsg]           = useState(null) // { ok, text }
+  const [resyncEnCurso, setResyncEnCurso]   = useState(false)
+  const [resyncProgreso, setResyncProgreso] = useState(null) // { procesados, total, fallidos }
+  const [resyncResultado, setResyncResultado] = useState(null) // { total, ok, fallidos: [{agente,fecha,error}] }
 
   // Carga la config global desde Supabase (sobreescribe localStorage si hay valores en BD)
   useEffect(() => {
@@ -2758,6 +2761,68 @@ export default function VipMisTurnos() {
     setImportando(false)
   }
 
+  // Reenvía TODOS los turnos (todas las líneas, todas las fechas) al Sheet vía el
+  // mismo Apps Script que usa la edición individual — sirve para "limpiar" de una
+  // vez las celdas que quedaron con fórmulas/valores viejos rotos, sin tener que
+  // abrir y guardar turno por turno. Se hace con concurrencia limitada para no
+  // saturar el Apps Script, y sin usar alert() por fila (serían miles de popups) —
+  // los errores se acumulan y se muestran en un resumen final.
+  async function handleResincronizarTodo() {
+    if (!scriptUrl.trim() || !scriptSecret.trim()) {
+      alert('Configura primero la URL Web App y el secret en ⚙️ Configuración.')
+      setShowConfig(true)
+      return
+    }
+    if (!confirm(
+      '¿Reenviar TODOS los turnos (todas las líneas y fechas) al Google Sheet?\n\n' +
+      'Esto puede tardar varios minutos según cuántos turnos haya. No cierres esta pestaña mientras corre.'
+    )) return
+
+    setResyncEnCurso(true)
+    setResyncResultado(null)
+    setResyncProgreso({ procesados: 0, total: 0, fallidos: 0 })
+
+    try {
+      const turnos = await getTodosLosTurnosParaResync()
+      const total = turnos.length
+      setResyncProgreso({ procesados: 0, total, fallidos: 0 })
+
+      const CONCURRENCIA_RESYNC = 5
+      const fallidos = []
+      let procesados = 0
+
+      for (let i = 0; i < turnos.length; i += CONCURRENCIA_RESYNC) {
+        const lote = turnos.slice(i, i + CONCURRENCIA_RESYNC)
+        await Promise.all(lote.map(async turno => {
+          const campos = {
+            turno_inicio:   turno.turno_inicio?.slice(0, 5)  || null,
+            turno_fin:      turno.turno_fin?.slice(0, 5)     || null,
+            break_inicio:   turno.break_inicio?.slice(0, 5)  || null,
+            break_fin:      turno.break_fin?.slice(0, 5)     || null,
+            lunch_inicio:   turno.lunch_inicio?.slice(0, 5)  || null,
+            lunch_fin:      turno.lunch_fin?.slice(0, 5)     || null,
+            linea_atencion: turno.linea_atencion || null,
+            tipo_turno:     turno.tipo_turno || null,
+            email:          turno.email || null,
+            novedad:        turno.novedad || null,
+          }
+          try {
+            await sincronizarTurnoEnSheet(scriptUrl.trim(), scriptSecret.trim(), turno.agente, turno.fecha, campos)
+          } catch (e) {
+            fallidos.push({ agente: turno.agente, fecha: turno.fecha, error: e.message })
+          }
+          procesados++
+        }))
+        setResyncProgreso({ procesados, total, fallidos: fallidos.length })
+      }
+
+      setResyncResultado({ total, ok: total - fallidos.length, fallidos })
+    } catch (e) {
+      alert('Error al leer los turnos: ' + e.message)
+    }
+    setResyncEnCurso(false)
+  }
+
   const tabs = [
     ['mis-turnos', t('turnos.misTurnos')],
     ['malla', t('turnos.malla')],
@@ -2847,6 +2912,40 @@ export default function VipMisTurnos() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"/>
                 </div>
               </div>
+
+              <hr className="border-blue-200"/>
+              <p className="text-xs font-semibold text-blue-700">Resincronizar todos los turnos con el Sheet</p>
+              <p className="text-xs text-gray-500">
+                Reenvía cada turno de cada línea y fecha al Sheet (mismo mecanismo que editar un turno individual).
+                Útil para limpiar celdas con fórmulas o valores viejos rotos. Puede tardar varios minutos.
+              </p>
+              <button onClick={handleResincronizarTodo} disabled={resyncEnCurso}
+                className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition">
+                <RefreshCw className={`w-4 h-4 ${resyncEnCurso ? 'animate-spin' : ''}`}/>
+                {resyncEnCurso ? 'Resincronizando…' : 'Resincronizar todos los turnos'}
+              </button>
+              {resyncProgreso && resyncEnCurso && (
+                <div className="text-xs text-gray-600">
+                  Procesados {resyncProgreso.procesados} de {resyncProgreso.total}
+                  {resyncProgreso.fallidos > 0 && <span className="text-red-600"> · {resyncProgreso.fallidos} fallidos</span>}
+                </div>
+              )}
+              {resyncResultado && (
+                <div className={`rounded-lg px-3 py-2 text-xs ${resyncResultado.fallidos.length === 0 ? 'bg-green-50 border border-green-200 text-green-800' : 'bg-amber-50 border border-amber-200 text-amber-800'}`}>
+                  <p className="font-semibold">
+                    ✓ {resyncResultado.ok} de {resyncResultado.total} turnos reenviados correctamente.
+                    {resyncResultado.fallidos.length > 0 && ` ${resyncResultado.fallidos.length} fallaron.`}
+                  </p>
+                  {resyncResultado.fallidos.length > 0 && (
+                    <ul className="mt-1.5 max-h-32 overflow-y-auto space-y-0.5">
+                      {resyncResultado.fallidos.slice(0, 30).map((f, i) => (
+                        <li key={i}>· {f.agente} — {f.fecha}: {f.error}</li>
+                      ))}
+                      {resyncResultado.fallidos.length > 30 && <li>… y {resyncResultado.fallidos.length - 30} más.</li>}
+                    </ul>
+                  )}
+                </div>
+              )}
             </>
           )}
           <button onClick={async () => {

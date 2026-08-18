@@ -1505,6 +1505,30 @@ export async function getTodasHorasExtra(desde, hasta) {
   return data ?? []
 }
 
+// Trae TODOS los turnos programados (todas las líneas, todas las fechas), paginando
+// de a 1000 filas — para la herramienta de resincronización masiva hacia el Sheet.
+export async function getTodosLosTurnosParaResync() {
+  const PAGE = 1000
+  let all = []
+  let from = 0
+  while (true) {
+    const { data, error } = await supabase
+      .from('vip_turnos_programados')
+      .select('id, agente, fecha, turno_inicio, turno_fin, break_inicio, break_fin, lunch_inicio, lunch_fin, linea_atencion, tipo_turno, email, novedad')
+      .not('agente', 'is', null)
+      .not('fecha', 'is', null)
+      .order('fecha', { ascending: true })
+      .order('id', { ascending: true })
+      .range(from, from + PAGE - 1)
+    if (error) throw new Error(error.message)
+    if (!data || !data.length) break
+    all = all.concat(data)
+    if (data.length < PAGE) break
+    from += PAGE
+  }
+  return all
+}
+
 export async function actualizarTurnoProgramado(id, campos) {
   const { error } = await supabase
     .from('vip_turnos_programados')
