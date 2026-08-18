@@ -574,7 +574,11 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
       lunch_fin:     descanso ? null : lchFin  || null,
       linea_atencion: linea   || null,
       tipo_turno:    tipoT    || null,
-      email:         descanso ? null : modalidad,
+      // La columna "email" del Sheet también se usa como modalidad — al marcar
+      // descanso debe quedar en "DESCANSO" (igual que el resto de filas de descanso
+      // ya existentes en el Sheet), no vacía, o el día de descanso no se distingue
+      // de un turno sin modalidad asignada.
+      email:         descanso ? 'DESCANSO' : modalidad,
       novedad:       novedadFinal || null,
     }
     try {
@@ -3128,7 +3132,7 @@ export default function VipMisTurnos() {
                                       <span className={`text-sm truncate block ${esMio ? 'font-semibold text-primary-800' : 'text-gray-700'}`}>{turno.agente}</span>
                                       <div className="flex items-center gap-2 flex-wrap mt-0.5">
                                         {turno.linea_atencion && <span className="text-xs text-gray-400">{turno.linea_atencion}</span>}
-                                        {turno.email && <ModalidadBadge email={turno.email} />}
+                                        {turno.email && !esDescanso(turno) && <ModalidadBadge email={turno.email} />}
                                       </div>
                                     </div>
                                     {turno.novedad && <span className="text-xs text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full shrink-0">{turno.novedad}</span>}
