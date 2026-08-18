@@ -589,11 +589,10 @@ function EditarTurnoModal({ turno, lineasDisponibles, onClose, onGuardado, scrip
         await actualizarTurnoProgramado(turno.id, campos)
       }
       if (scriptUrl?.trim() && scriptSecret?.trim()) {
-        // Solo hora, sin fecha — el Sheet ya formatea esas columnas como "hora" y
-        // mandar un string con fecha (ej. "2026-08-17 08:00:00") hace que Google
-        // Sheets lo interprete como fecha+hora completa y le cambie el formato a
-        // la celda, mostrando la fecha en vez de solo HH:MM.
-        const dt = (h) => h ? `${h}:00` : null
+        // Solo HH:MM, igual que el resto de filas del Sheet — sin fecha (eso hacía
+        // que Sheets reinterpretara la celda como fecha+hora completa) y sin
+        // segundos de más (los inputs de hora ya vienen como "HH:MM").
+        const dt = (h) => h || null
         const esVotacion = novedadFinal?.startsWith('Votación')
         const camposSheet = {
           ...campos,
