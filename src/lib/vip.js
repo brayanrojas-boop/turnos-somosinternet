@@ -1290,6 +1290,37 @@ export async function sincronizarTurnoEnSheet(url, secret, agente, fecha, campos
 }
 
 export async function aplicarCambioEnSupabase(cambio) {
+  // Si ambas fechas son de descanso y son distintas, cada agente tiene una fila de
+  // DESCANSO en su propia fecha además de la fila de trabajo en la fecha del otro.
+  // Hay que cruzar las 4 combinaciones (agente+fecha), no solo 2, o la fila de
+  // descanso del dueño original nunca se libera (queda duplicado en un día y
+  // sin registro en el otro). Ver _aplicarSwapTurnos, que ya maneja este caso.
+  const esDescansoCruzado =
+    !cambio.turno_sol_inicio &&
+    !cambio.turno_rec_inicio &&
+    cambio.turno_sol_fecha !== cambio.turno_rec_fecha
+
+  if (esDescansoCruzado) {
+    const [
+      { data: rowsAenSol }, { data: rowsBenSol },
+      { data: rowsAenRec }, { data: rowsBenRec },
+    ] = await Promise.all([
+      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
+      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.receptor_nombre),
+      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.solicitante_nombre),
+      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
+    ])
+    if (!rowsAenSol?.length) throw new Error(`No se encontró el turno de ${cambio.solicitante_nombre} el ${cambio.turno_sol_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
+    if (!rowsBenRec?.length) throw new Error(`No se encontró el turno de ${cambio.receptor_nombre} el ${cambio.turno_rec_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
+    await Promise.all([
+      ...(rowsAenSol ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
+      ...(rowsBenSol ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+      ...(rowsAenRec ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
+      ...(rowsBenRec ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+    ])
+    return
+  }
+
   // Intercambiar TODAS las filas (turno + descanso) de cada persona en su fecha
   const [{ data: filasA }, { data: filasB }] = await Promise.all([
     supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
