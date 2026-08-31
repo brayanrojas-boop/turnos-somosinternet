@@ -1269,14 +1269,19 @@ export async function aplicarCambioEnSheet(url, secret, cambio) {
   } finally {
     clearTimeout(timer)
   }
-  // Google Apps Script redirige por CORS — si respondió con 200 el script ejecutó OK.
-  // Intentamos leer JSON pero si falla (respuesta opaca/HTML) lo consideramos éxito
-  // porque los logs de Apps Script confirman que doPost se ejecuta correctamente.
-  if (res.ok || res.status === 0) return
+  // Si la respuesta es opaca (status 0, típico de un redirect cross-origin de Apps
+  // Script) no se puede leer el cuerpo en absoluto — ahí sí hay que asumir éxito.
+  // Pero cuando SÍ se puede leer (res.ok con cuerpo accesible), el propio doPost
+  // devuelve texto plano 'OK' o 'ERROR: ...' (ver txt() en el script) — antes este
+  // código retornaba apenas veía res.ok=true SIN mirar el texto, así que cualquier
+  // 'ERROR: ...' que el script devolviera (ej. una fila que no encontró) se
+  // trataba como éxito silencioso. Por eso un swap podía fallar a medias en el
+  // Sheet sin que la app se enterara.
+  if (res.status === 0) return
   const text = await res.text()
-  let json
-  try { json = JSON.parse(text) } catch { return } // respuesta opaca = éxito
-  if (!json.ok) throw new Error(json.error ?? 'Error en el Sheet')
+  if (/^ERROR:/i.test(text.trim())) throw new Error(text.trim().replace(/^ERROR:\s*/i, ''))
+  if (res.ok) return
+  throw new Error(text || `Error ${res.status} en el Sheet`)
 }
 
 // Exporta turnos generados al Sheet (bulk_insert): reemplaza filas de esa línea+semana
