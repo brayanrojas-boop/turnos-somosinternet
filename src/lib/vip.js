@@ -1015,6 +1015,20 @@ export async function validarDescanso12h(analistaNombre, fechaNueva, inicioNuevo
   return { ok: true }
 }
 
+// Reasigna el campo `agente` de una fila y lanza si algo salió mal — incluyendo el
+// caso en que Supabase no devuelve `error` pero tampoco afecta ninguna fila (típico
+// de un UPDATE bloqueado en silencio por una política RLS). Sin este chequeo, un
+// swap puede "confirmarse" en la UI sin haberse aplicado realmente.
+async function _actualizarAgenteOTirar(id, nuevoAgente) {
+  const { error, data } = await supabase
+    .from('vip_turnos_programados')
+    .update({ agente: nuevoAgente })
+    .eq('id', id)
+    .select('id')
+  if (error) throw new Error(error.message)
+  if (!data?.length) throw new Error(`No se pudo reasignar el turno (id ${id}) a ${nuevoAgente}. Puede estar bloqueado por permisos.`)
+}
+
 // Aplica el swap de turnos de un cambio. Si ambas fechas son descanso y distintas,
 // hace un intercambio completo (todas las filas de ambas fechas entre ambos agentes),
 // igual que intercambiarDescansosCompleto. Si es swap de trabajo, solo intercambia
@@ -1036,10 +1050,10 @@ async function _aplicarSwapTurnos(cambio) {
       supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
     ])
     await Promise.all([
-      ...(rowsAenSol ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
-      ...(rowsBenSol ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
-      ...(rowsAenRec ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
-      ...(rowsBenRec ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+      ...(rowsAenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
+      ...(rowsBenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
+      ...(rowsAenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
+      ...(rowsBenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
     ])
   } else {
     const [{ data: filasA }, { data: filasB }] = await Promise.all([
@@ -1048,8 +1062,8 @@ async function _aplicarSwapTurnos(cambio) {
     ])
     if (!filasA?.length || !filasB?.length) throw new Error('No se encontraron los turnos en la base de datos.')
     await Promise.all([
-      ...filasA.map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
-      ...filasB.map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+      ...filasA.map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
+      ...filasB.map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
     ])
   }
 }
@@ -1313,10 +1327,10 @@ export async function aplicarCambioEnSupabase(cambio) {
     if (!rowsAenSol?.length) throw new Error(`No se encontró el turno de ${cambio.solicitante_nombre} el ${cambio.turno_sol_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
     if (!rowsBenRec?.length) throw new Error(`No se encontró el turno de ${cambio.receptor_nombre} el ${cambio.turno_rec_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
     await Promise.all([
-      ...(rowsAenSol ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
-      ...(rowsBenSol ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
-      ...(rowsAenRec ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
-      ...(rowsBenRec ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+      ...(rowsAenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
+      ...(rowsBenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
+      ...(rowsAenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
+      ...(rowsBenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
     ])
     return
   }
@@ -1329,16 +1343,14 @@ export async function aplicarCambioEnSupabase(cambio) {
   if (!filasA?.length) throw new Error(`No se encontró el turno de ${cambio.solicitante_nombre} el ${cambio.turno_sol_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
   if (!filasB?.length) throw new Error(`No se encontró el turno de ${cambio.receptor_nombre} el ${cambio.turno_rec_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
   await Promise.all([
-    ...filasA.map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.receptor_nombre }).eq('id', r.id)),
-    ...filasB.map(r => supabase.from('vip_turnos_programados').update({ agente: cambio.solicitante_nombre }).eq('id', r.id)),
+    ...filasA.map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
+    ...filasB.map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
   ])
 }
 
 export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre, motivo) {
-  const { error: e1 } = await supabase.from('vip_turnos_programados').update({ agente: turno2.agente }).eq('id', turno1.id)
-  if (e1) throw new Error(e1.message)
-  const { error: e2 } = await supabase.from('vip_turnos_programados').update({ agente: turno1.agente }).eq('id', turno2.id)
-  if (e2) throw new Error(e2.message)
+  await _actualizarAgenteOTirar(turno1.id, turno2.agente)
+  await _actualizarAgenteOTirar(turno2.id, turno1.agente)
   const { error: ae } = await supabase.from('vip_cambios_turno').insert({
     solicitante_nombre: turno1.agente,
     receptor_nombre:    turno2.agente,
@@ -1370,10 +1382,10 @@ export async function intercambiarDescansosCompleto(agenteA, dateA, agenteB, dat
     supabase.from('vip_turnos_programados').select('id').eq('fecha', dateB).ilike('agente', agenteB),
   ])
   await Promise.all([
-    ...(rowsAenA ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteB }).eq('id', r.id)),
-    ...(rowsBenA ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteA }).eq('id', r.id)),
-    ...(rowsAenB ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteB }).eq('id', r.id)),
-    ...(rowsBenB ?? []).map(r => supabase.from('vip_turnos_programados').update({ agente: agenteA }).eq('id', r.id)),
+    ...(rowsAenA ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteB)),
+    ...(rowsBenA ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteA)),
+    ...(rowsAenB ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteB)),
+    ...(rowsBenB ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteA)),
   ])
   const { error: ae } = await supabase.from('vip_cambios_turno').insert({
     solicitante_nombre: agenteA,
