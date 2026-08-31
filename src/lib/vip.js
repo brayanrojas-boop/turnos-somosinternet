@@ -1308,6 +1308,37 @@ export async function sincronizarTurnoEnSheet(url, secret, agente, fecha, campos
   })
 }
 
+// Resincroniza MUCHOS turnos al Sheet en una sola llamada (action: 'bulk_update').
+// Antes esto se hacía con N llamadas individuales a sincronizarTurnoEnSheet (una
+// por turno, 5 en paralelo) — cada una releía las columnas agente/fecha completas
+// del Sheet desde cero, y con miles de turnos eso saturaba el Apps Script y hacía
+// que CUALQUIER otra operación (como un cambio de turno normal) quedara en cola
+// esperando minutos. Ahora el Apps Script lee y escribe toda la hoja una sola vez.
+export async function resincronizarTurnosEnSheetBulk(url, secret, rows) {
+  const ctrl = new AbortController()
+  const timer = setTimeout(() => ctrl.abort(), 120_000)
+  let res
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      redirect: 'follow',
+      signal: ctrl.signal,
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ secret, action: 'bulk_update', rows }),
+    })
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('El script no respondió en 2 minutos, pero puede que el resync se haya aplicado igual. Revisa el Sheet en unos minutos.')
+    throw e
+  } finally {
+    clearTimeout(timer)
+  }
+  if (res.status === 0) return
+  const text = await res.text()
+  if (/^ERROR:/i.test(text.trim())) throw new Error(text.trim().replace(/^ERROR:\s*/i, ''))
+  if (res.ok) return text
+  throw new Error(text || `Error ${res.status} en el Sheet`)
+}
+
 export async function aplicarCambioEnSupabase(cambio) {
   // Si ambas fechas son de descanso y son distintas, cada agente tiene una fila de
   // DESCANSO en su propia fecha además de la fila de trabajo en la fecha del otro.

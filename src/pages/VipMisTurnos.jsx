@@ -12,7 +12,7 @@ import {
   autoDetectarNombreTurno, guardarNombreTurnoEnPerfil,
   reportarHorasExtra, getMisHorasExtra,
   actualizarTurnoProgramado, crearTurnoProgramado,
-  sincronizarTurnoEnSheet, getTodosLosTurnosParaResync,
+  sincronizarTurnoEnSheet, resincronizarTurnosEnSheetBulk, getTodosLosTurnosParaResync,
   iniciarPausa, terminarPausa, getPausaActiva, getPausasHoy, getPausasHoyTodos,
   registrarSlackIdAutomatico, suscribirSolicitudesCambio,
 } from '../lib/vip'
@@ -2761,12 +2761,15 @@ export default function VipMisTurnos() {
     setImportando(false)
   }
 
-  // Reenvía TODOS los turnos (todas las líneas, todas las fechas) al Sheet vía el
-  // mismo Apps Script que usa la edición individual — sirve para "limpiar" de una
-  // vez las celdas que quedaron con fórmulas/valores viejos rotos, sin tener que
-  // abrir y guardar turno por turno. Se hace con concurrencia limitada para no
-  // saturar el Apps Script, y sin usar alert() por fila (serían miles de popups) —
-  // los errores se acumulan y se muestran en un resumen final.
+  // Reenvía TODOS los turnos (todas las líneas, todas las fechas) al Sheet — sirve
+  // para "limpiar" de una vez las celdas que quedaron con fórmulas/valores viejos
+  // rotos, sin tener que abrir y guardar turno por turno. Antes esto mandaba una
+  // llamada HTTP individual por turno (con concurrencia 5): cada una releía las
+  // columnas agente/fecha completas del Sheet desde cero, y con miles de turnos
+  // eso saturaba el Apps Script y hacía que CUALQUIER otra operación (como un
+  // cambio de turno normal de un analista) quedara en cola esperando minutos.
+  // Ahora se manda todo en una sola llamada (resincronizarTurnosEnSheetBulk) y el
+  // Apps Script lee/escribe toda la hoja de una sola vez.
   async function handleResincronizarTodo() {
     if (!scriptUrl.trim() || !scriptSecret.trim()) {
       alert('Configura primero la URL Web App y el secret en ⚙️ Configuración.')
@@ -2775,50 +2778,40 @@ export default function VipMisTurnos() {
     }
     if (!confirm(
       '¿Reenviar TODOS los turnos (todas las líneas y fechas) al Google Sheet?\n\n' +
-      'Esto puede tardar varios minutos según cuántos turnos haya. No cierres esta pestaña mientras corre.'
+      'Se hace en una sola operación — puede tardar hasta un minuto según cuántos turnos haya. No cierres esta pestaña mientras corre.'
     )) return
 
     setResyncEnCurso(true)
     setResyncResultado(null)
-    setResyncProgreso({ procesados: 0, total: 0, fallidos: 0 })
+    setResyncProgreso(null)
 
     try {
       const turnos = await getTodosLosTurnosParaResync()
       const total = turnos.length
       setResyncProgreso({ procesados: 0, total, fallidos: 0 })
 
-      const CONCURRENCIA_RESYNC = 5
-      const fallidos = []
-      let procesados = 0
+      const rows = turnos.map(turno => ({
+        agente: turno.agente,
+        fecha: turno.fecha,
+        campos: {
+          turno_inicio:   turno.turno_inicio?.slice(0, 5)  || null,
+          turno_fin:      turno.turno_fin?.slice(0, 5)     || null,
+          break_inicio:   turno.break_inicio?.slice(0, 5)  || null,
+          break_fin:      turno.break_fin?.slice(0, 5)     || null,
+          lunch_inicio:   turno.lunch_inicio?.slice(0, 5)  || null,
+          lunch_fin:      turno.lunch_fin?.slice(0, 5)     || null,
+          linea_atencion: turno.linea_atencion || null,
+          tipo_turno:     turno.tipo_turno || null,
+          email:          turno.email || null,
+          novedad:        turno.novedad || null,
+        },
+      }))
 
-      for (let i = 0; i < turnos.length; i += CONCURRENCIA_RESYNC) {
-        const lote = turnos.slice(i, i + CONCURRENCIA_RESYNC)
-        await Promise.all(lote.map(async turno => {
-          const campos = {
-            turno_inicio:   turno.turno_inicio?.slice(0, 5)  || null,
-            turno_fin:      turno.turno_fin?.slice(0, 5)     || null,
-            break_inicio:   turno.break_inicio?.slice(0, 5)  || null,
-            break_fin:      turno.break_fin?.slice(0, 5)     || null,
-            lunch_inicio:   turno.lunch_inicio?.slice(0, 5)  || null,
-            lunch_fin:      turno.lunch_fin?.slice(0, 5)     || null,
-            linea_atencion: turno.linea_atencion || null,
-            tipo_turno:     turno.tipo_turno || null,
-            email:          turno.email || null,
-            novedad:        turno.novedad || null,
-          }
-          try {
-            await sincronizarTurnoEnSheet(scriptUrl.trim(), scriptSecret.trim(), turno.agente, turno.fecha, campos)
-          } catch (e) {
-            fallidos.push({ agente: turno.agente, fecha: turno.fecha, error: e.message })
-          }
-          procesados++
-        }))
-        setResyncProgreso({ procesados, total, fallidos: fallidos.length })
-      }
-
-      setResyncResultado({ total, ok: total - fallidos.length, fallidos })
+      await resincronizarTurnosEnSheetBulk(scriptUrl.trim(), scriptSecret.trim(), rows)
+      setResyncProgreso({ procesados: total, total, fallidos: 0 })
+      setResyncResultado({ total, ok: total, fallidos: [] })
     } catch (e) {
-      alert('Error al leer los turnos: ' + e.message)
+      setResyncResultado({ total: 0, ok: 0, fallidos: [{ agente: '', fecha: '', error: e.message }] })
     }
     setResyncEnCurso(false)
   }
@@ -2916,8 +2909,8 @@ export default function VipMisTurnos() {
               <hr className="border-blue-200"/>
               <p className="text-xs font-semibold text-blue-700">Resincronizar todos los turnos con el Sheet</p>
               <p className="text-xs text-gray-500">
-                Reenvía cada turno de cada línea y fecha al Sheet (mismo mecanismo que editar un turno individual).
-                Útil para limpiar celdas con fórmulas o valores viejos rotos. Puede tardar varios minutos.
+                Reenvía todos los turnos de todas las líneas y fechas al Sheet en una sola operación.
+                Útil para limpiar celdas con fórmulas o valores viejos rotos. Puede tardar hasta un minuto.
               </p>
               <button onClick={handleResincronizarTodo} disabled={resyncEnCurso}
                 className="flex items-center gap-2 px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition">
@@ -2926,8 +2919,7 @@ export default function VipMisTurnos() {
               </button>
               {resyncProgreso && resyncEnCurso && (
                 <div className="text-xs text-gray-600">
-                  Procesados {resyncProgreso.procesados} de {resyncProgreso.total}
-                  {resyncProgreso.fallidos > 0 && <span className="text-red-600"> · {resyncProgreso.fallidos} fallidos</span>}
+                  Enviando {resyncProgreso.total} turnos en una sola operación…
                 </div>
               )}
               {resyncResultado && (
