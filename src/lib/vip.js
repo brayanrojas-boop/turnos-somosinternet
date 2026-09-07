@@ -1029,42 +1029,34 @@ async function _actualizarAgenteOTirar(id, nuevoAgente) {
   if (!data?.length) throw new Error(`No se pudo reasignar el turno (id ${id}) a ${nuevoAgente}. Puede estar bloqueado por permisos.`)
 }
 
-// Aplica el swap de turnos de un cambio. Si ambas fechas son descanso y distintas,
-// hace un intercambio completo (todas las filas de ambas fechas entre ambos agentes),
-// igual que intercambiarDescansosCompleto. Si es swap de trabajo, solo intercambia
-// las filas de cada agente en su fecha respectiva.
-async function _aplicarSwapTurnos(cambio) {
-  const esDescansoCruzado =
-    !cambio.turno_sol_inicio &&
-    !cambio.turno_rec_inicio &&
-    cambio.turno_sol_fecha !== cambio.turno_rec_fecha
+// Intercambia el agente de DOS filas de UNA misma fecha entre agenteA y agenteB
+// (la fila de agenteA en esa fecha pasa a agenteB, y viceversa). Es el mecanismo
+// más simple posible — un solo día, dos agentes — y es el que en la práctica
+// nunca ha fallado, a diferencia de intentar cruzar 4 filas de 2 fechas distintas
+// en una sola operación.
+async function _swapUnaFecha(fecha, agenteA, agenteB) {
+  const [{ data: filasA }, { data: filasB }] = await Promise.all([
+    supabase.from('vip_turnos_programados').select('id').eq('fecha', fecha).ilike('agente', agenteA),
+    supabase.from('vip_turnos_programados').select('id').eq('fecha', fecha).ilike('agente', agenteB),
+  ])
+  if (!filasA?.length) throw new Error(`No se encontró el turno de ${agenteA} el ${fecha}.`)
+  if (!filasB?.length) throw new Error(`No se encontró el turno de ${agenteB} el ${fecha}.`)
+  await Promise.all([
+    ...filasA.map(r => _actualizarAgenteOTirar(r.id, agenteB)),
+    ...filasB.map(r => _actualizarAgenteOTirar(r.id, agenteA)),
+  ])
+}
 
-  if (esDescansoCruzado) {
-    const [
-      { data: rowsAenSol }, { data: rowsBenSol },
-      { data: rowsAenRec }, { data: rowsBenRec },
-    ] = await Promise.all([
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.receptor_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.solicitante_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
-    ])
-    await Promise.all([
-      ...(rowsAenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
-      ...(rowsBenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
-      ...(rowsAenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
-      ...(rowsBenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
-    ])
-  } else {
-    const [{ data: filasA }, { data: filasB }] = await Promise.all([
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
-    ])
-    if (!filasA?.length || !filasB?.length) throw new Error('No se encontraron los turnos en la base de datos.')
-    await Promise.all([
-      ...filasA.map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
-      ...filasB.map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
-    ])
+// Aplica el swap de turnos de un cambio. Si las dos fechas son distintas (típico
+// de un intercambio de días de descanso cruzados), en vez de cruzar las 4 filas
+// de ambas fechas en una sola operación —que es donde venían los fallos
+// intermitentes (duplicados/huecos)— se hacen DOS intercambios independientes de
+// una sola fecha cada uno. El resultado final es matemáticamente idéntico, pero
+// cada mitad usa el camino simple de un solo día que siempre funcionó bien.
+async function _aplicarSwapTurnos(cambio) {
+  await _swapUnaFecha(cambio.turno_sol_fecha, cambio.solicitante_nombre, cambio.receptor_nombre)
+  if (cambio.turno_rec_fecha !== cambio.turno_sol_fecha) {
+    await _swapUnaFecha(cambio.turno_rec_fecha, cambio.solicitante_nombre, cambio.receptor_nombre)
   }
 }
 
@@ -1243,7 +1235,11 @@ export async function rechazarCambioSupervisor(id, supervisorNombre, motivo) {
   if (error) throw new Error(error.message)
 }
 
-export async function aplicarCambioEnSheet(url, secret, cambio) {
+// Manda al Apps Script el swap de una sola fecha entre dos agentes (agente1 y
+// agente2 se cruzan en esa misma fecha). Es el mecanismo simple de un solo día
+// — nunca falló en las pruebas, a diferencia de mandar 2 fechas distintas en un
+// solo payload y esperar que el script cruce las 4 combinaciones correctamente.
+async function _postSwapUnaFecha(url, secret, agente1, fecha, agente2) {
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 90_000)
   let res
@@ -1253,18 +1249,12 @@ export async function aplicarCambioEnSheet(url, secret, cambio) {
       redirect: 'follow',
       signal: ctrl.signal,
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        secret,
-        agente1: cambio.solicitante_nombre,
-        fecha1: cambio.turno_sol_fecha,
-        agente2: cambio.receptor_nombre,
-        fecha2: cambio.turno_rec_fecha,
-      }),
+      body: JSON.stringify({ secret, agente1, fecha1: fecha, agente2, fecha2: fecha }),
     })
   } catch (e) {
     // El abort solo cancela la espera del navegador: Apps Script puede seguir
     // ejecutando doPost del lado del servidor y aplicar el cambio igualmente.
-    if (e.name === 'AbortError') throw new Error('El script no respondió en 90 s, pero puede que el cambio se aplique igual en unos minutos. Si no aparece en el Sheet, verifica la URL Web App.')
+    if (e.name === 'AbortError') throw new Error(`El script no respondió en 90 s al sincronizar el ${fecha}, pero puede que el cambio se aplique igual en unos minutos. Si no aparece en el Sheet, verifica la URL Web App.`)
     throw e
   } finally {
     clearTimeout(timer)
@@ -1282,6 +1272,17 @@ export async function aplicarCambioEnSheet(url, secret, cambio) {
   if (/^ERROR:/i.test(text.trim())) throw new Error(text.trim().replace(/^ERROR:\s*/i, ''))
   if (res.ok) return
   throw new Error(text || `Error ${res.status} en el Sheet`)
+}
+
+// Aplica el cambio de turno en el Sheet. Si las dos fechas son distintas (típico
+// de un intercambio de descanso cruzado), se manda como DOS swaps independientes
+// de una sola fecha cada uno en vez de un solo payload con las 2 fechas — evita
+// por completo la lógica frágil de cruzar 4 filas en una sola llamada al script.
+export async function aplicarCambioEnSheet(url, secret, cambio) {
+  await _postSwapUnaFecha(url, secret, cambio.solicitante_nombre, cambio.turno_sol_fecha, cambio.receptor_nombre)
+  if (cambio.turno_rec_fecha !== cambio.turno_sol_fecha) {
+    await _postSwapUnaFecha(url, secret, cambio.solicitante_nombre, cambio.turno_rec_fecha, cambio.receptor_nombre)
+  }
 }
 
 // Exporta turnos generados al Sheet (bulk_insert): reemplaza filas de esa línea+semana
@@ -1339,49 +1340,12 @@ export async function resincronizarTurnosEnSheetBulk(url, secret, rows) {
   throw new Error(text || `Error ${res.status} en el Sheet`)
 }
 
+// Usada por la aprobación manual del supervisor (handleAprobar). Antes duplicaba
+// la lógica de "cruzar 4 filas de 2 fechas" — ahora es lo mismo que el flujo de
+// aceptación directa: dos intercambios independientes de una sola fecha cada uno
+// (ver _aplicarSwapTurnos/_swapUnaFecha).
 export async function aplicarCambioEnSupabase(cambio) {
-  // Si ambas fechas son de descanso y son distintas, cada agente tiene una fila de
-  // DESCANSO en su propia fecha además de la fila de trabajo en la fecha del otro.
-  // Hay que cruzar las 4 combinaciones (agente+fecha), no solo 2, o la fila de
-  // descanso del dueño original nunca se libera (queda duplicado en un día y
-  // sin registro en el otro). Ver _aplicarSwapTurnos, que ya maneja este caso.
-  const esDescansoCruzado =
-    !cambio.turno_sol_inicio &&
-    !cambio.turno_rec_inicio &&
-    cambio.turno_sol_fecha !== cambio.turno_rec_fecha
-
-  if (esDescansoCruzado) {
-    const [
-      { data: rowsAenSol }, { data: rowsBenSol },
-      { data: rowsAenRec }, { data: rowsBenRec },
-    ] = await Promise.all([
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.receptor_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.solicitante_nombre),
-      supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
-    ])
-    if (!rowsAenSol?.length) throw new Error(`No se encontró el turno de ${cambio.solicitante_nombre} el ${cambio.turno_sol_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
-    if (!rowsBenRec?.length) throw new Error(`No se encontró el turno de ${cambio.receptor_nombre} el ${cambio.turno_rec_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
-    await Promise.all([
-      ...(rowsAenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
-      ...(rowsBenSol ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
-      ...(rowsAenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
-      ...(rowsBenRec ?? []).map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
-    ])
-    return
-  }
-
-  // Intercambiar TODAS las filas (turno + descanso) de cada persona en su fecha
-  const [{ data: filasA }, { data: filasB }] = await Promise.all([
-    supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_sol_fecha).ilike('agente', cambio.solicitante_nombre),
-    supabase.from('vip_turnos_programados').select('id').eq('fecha', cambio.turno_rec_fecha).ilike('agente', cambio.receptor_nombre),
-  ])
-  if (!filasA?.length) throw new Error(`No se encontró el turno de ${cambio.solicitante_nombre} el ${cambio.turno_sol_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
-  if (!filasB?.length) throw new Error(`No se encontró el turno de ${cambio.receptor_nombre} el ${cambio.turno_rec_fecha}. Verifica que el nombre coincida exactamente con el registrado en la malla.`)
-  await Promise.all([
-    ...filasA.map(r => _actualizarAgenteOTirar(r.id, cambio.receptor_nombre)),
-    ...filasB.map(r => _actualizarAgenteOTirar(r.id, cambio.solicitante_nombre)),
-  ])
+  await _aplicarSwapTurnos(cambio)
 }
 
 export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre, motivo) {
@@ -1408,21 +1372,10 @@ export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre
 // dateA = fecha de descanso de agenteA, dateB = fecha de descanso de agenteB.
 // Para cada fecha, reasigna los turnos de A→B y de B→A, evitando filas duplicadas.
 export async function intercambiarDescansosCompleto(agenteA, dateA, agenteB, dateB, supervisorNombre, motivo) {
-  const [
-    { data: rowsAenA }, { data: rowsBenA },
-    { data: rowsAenB }, { data: rowsBenB },
-  ] = await Promise.all([
-    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateA).ilike('agente', agenteA),
-    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateA).ilike('agente', agenteB),
-    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateB).ilike('agente', agenteA),
-    supabase.from('vip_turnos_programados').select('id').eq('fecha', dateB).ilike('agente', agenteB),
-  ])
-  await Promise.all([
-    ...(rowsAenA ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteB)),
-    ...(rowsBenA ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteA)),
-    ...(rowsAenB ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteB)),
-    ...(rowsBenB ?? []).map(r => _actualizarAgenteOTirar(r.id, agenteA)),
-  ])
+  // Dos intercambios independientes de una sola fecha cada uno, en vez de cruzar
+  // las 4 filas de las 2 fechas en una sola operación (ver _swapUnaFecha).
+  await _swapUnaFecha(dateA, agenteA, agenteB)
+  if (dateB !== dateA) await _swapUnaFecha(dateB, agenteA, agenteB)
   const { error: ae } = await supabase.from('vip_cambios_turno').insert({
     solicitante_nombre: agenteA,
     receptor_nombre:    agenteB,
