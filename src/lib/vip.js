@@ -1029,18 +1029,22 @@ async function _actualizarAgenteOTirar(id, nuevoAgente) {
   if (!data?.length) throw new Error(`No se pudo reasignar el turno (id ${id}) a ${nuevoAgente}. Puede estar bloqueado por permisos.`)
 }
 
-// Intercambia el agente de DOS filas de UNA misma fecha entre agenteA y agenteB
-// (la fila de agenteA en esa fecha pasa a agenteB, y viceversa). Es el mecanismo
-// más simple posible — un solo día, dos agentes — y es el que en la práctica
-// nunca ha fallado, a diferencia de intentar cruzar 4 filas de 2 fechas distintas
-// en una sola operación.
-async function _swapUnaFecha(fecha, agenteA, agenteB) {
+// Verifica (SIN escribir nada) que agenteA y agenteB tengan fila esa fecha, y
+// devuelve esas filas. Separado de _swapUnaFecha para poder validar las 2 fechas
+// de un intercambio de descanso cruzado ANTES de tocar ninguna — si falta una
+// fila en cualquiera de las dos, no se escribe nada en ningún lado.
+async function _verificarFilasUnaFecha(fecha, agenteA, agenteB) {
   const [{ data: filasA }, { data: filasB }] = await Promise.all([
     supabase.from('vip_turnos_programados').select('id').eq('fecha', fecha).ilike('agente', agenteA),
     supabase.from('vip_turnos_programados').select('id').eq('fecha', fecha).ilike('agente', agenteB),
   ])
   if (!filasA?.length) throw new Error(`No se encontró el turno de ${agenteA} el ${fecha}.`)
   if (!filasB?.length) throw new Error(`No se encontró el turno de ${agenteB} el ${fecha}.`)
+  return { filasA, filasB }
+}
+
+// Aplica el intercambio de una fecha ya verificada (filasA → agenteB, filasB → agenteA).
+async function _escribirSwapUnaFecha({ filasA, filasB }, agenteA, agenteB) {
   await Promise.all([
     ...filasA.map(r => _actualizarAgenteOTirar(r.id, agenteB)),
     ...filasB.map(r => _actualizarAgenteOTirar(r.id, agenteA)),
@@ -1048,15 +1052,41 @@ async function _swapUnaFecha(fecha, agenteA, agenteB) {
 }
 
 // Aplica el swap de turnos de un cambio. Si las dos fechas son distintas (típico
-// de un intercambio de días de descanso cruzados), en vez de cruzar las 4 filas
-// de ambas fechas en una sola operación —que es donde venían los fallos
-// intermitentes (duplicados/huecos)— se hacen DOS intercambios independientes de
-// una sola fecha cada uno. El resultado final es matemáticamente idéntico, pero
-// cada mitad usa el camino simple de un solo día que siempre funcionó bien.
+// de un intercambio de días de descanso cruzados), se hacen DOS intercambios
+// independientes de una sola fecha cada uno en vez de cruzar las 4 filas de
+// ambas fechas en una sola operación — cada mitad usa el camino simple de un
+// solo día que siempre funcionó bien en la práctica.
+//
+// Para que esto sea atómico (nunca dejar a un analista sin descanso y al otro
+// con dos), se hace en 3 pasos:
+//   1. Verificar AMBAS fechas (solo lectura) — si falta algo, no se escribe nada.
+//   2. Aplicar la primera fecha.
+//   3. Aplicar la segunda fecha; si esto falla, se REVIERTE automáticamente la
+//      primera antes de lanzar el error, para no dejarlo a medias.
 async function _aplicarSwapTurnos(cambio) {
-  await _swapUnaFecha(cambio.turno_sol_fecha, cambio.solicitante_nombre, cambio.receptor_nombre)
-  if (cambio.turno_rec_fecha !== cambio.turno_sol_fecha) {
-    await _swapUnaFecha(cambio.turno_rec_fecha, cambio.solicitante_nombre, cambio.receptor_nombre)
+  const fecha1 = cambio.turno_sol_fecha
+  const fecha2 = cambio.turno_rec_fecha
+  const A = cambio.solicitante_nombre
+  const B = cambio.receptor_nombre
+
+  const check1 = await _verificarFilasUnaFecha(fecha1, A, B)
+  const check2 = fecha2 !== fecha1 ? await _verificarFilasUnaFecha(fecha2, A, B) : null
+
+  await _escribirSwapUnaFecha(check1, A, B)
+
+  if (check2) {
+    try {
+      await _escribirSwapUnaFecha(check2, A, B)
+    } catch (e) {
+      // La segunda fecha falló DESPUÉS de aplicar la primera — revertir la
+      // primera (volver cada fila a su agente original por id) para no dejar
+      // a nadie a medias (sin descanso, o con dos descansos).
+      await Promise.all([
+        ...check1.filasA.map(r => _actualizarAgenteOTirar(r.id, A).catch(() => {})),
+        ...check1.filasB.map(r => _actualizarAgenteOTirar(r.id, B).catch(() => {})),
+      ])
+      throw new Error(`No se pudo completar el cambio del ${fecha2} — se revirtió el del ${fecha1} para no dejarlo a medias. Detalle: ${e.message}`)
+    }
   }
 }
 
@@ -1278,10 +1308,36 @@ async function _postSwapUnaFecha(url, secret, agente1, fecha, agente2) {
 // de un intercambio de descanso cruzado), se manda como DOS swaps independientes
 // de una sola fecha cada uno en vez de un solo payload con las 2 fechas — evita
 // por completo la lógica frágil de cruzar 4 filas en una sola llamada al script.
+//
+// Si la segunda fecha falla DESPUÉS de que la primera ya se aplicó, se intenta
+// revertir la primera automáticamente (llamar el mismo swap de nuevo lo deshace,
+// porque es una operación simétrica) para no dejar el Sheet a medias — mismo
+// principio que la versión atómica de _aplicarSwapTurnos en Supabase.
 export async function aplicarCambioEnSheet(url, secret, cambio) {
-  await _postSwapUnaFecha(url, secret, cambio.solicitante_nombre, cambio.turno_sol_fecha, cambio.receptor_nombre)
-  if (cambio.turno_rec_fecha !== cambio.turno_sol_fecha) {
-    await _postSwapUnaFecha(url, secret, cambio.solicitante_nombre, cambio.turno_rec_fecha, cambio.receptor_nombre)
+  const A = cambio.solicitante_nombre
+  const B = cambio.receptor_nombre
+  const fecha1 = cambio.turno_sol_fecha
+  const fecha2 = cambio.turno_rec_fecha
+
+  await _postSwapUnaFecha(url, secret, A, fecha1, B)
+  if (fecha2 !== fecha1) {
+    try {
+      await _postSwapUnaFecha(url, secret, A, fecha2, B)
+    } catch (e) {
+      let revertido = true
+      try {
+        await _postSwapUnaFecha(url, secret, A, fecha1, B)
+      } catch {
+        revertido = false
+      }
+      throw new Error(
+        `No se pudo aplicar el cambio del ${fecha2} en el Sheet` +
+        (revertido
+          ? ` (se revirtió el del ${fecha1} para no dejarlo a medias).`
+          : ` — TAMPOCO se pudo revertir el del ${fecha1}: revisa el Sheet manualmente para ${A}/${B} en esas fechas.`) +
+        ` Detalle: ${e.message}`
+      )
+    }
   }
 }
 
@@ -1372,10 +1428,13 @@ export async function intercambiarTurnosDirecto(turno1, turno2, supervisorNombre
 // dateA = fecha de descanso de agenteA, dateB = fecha de descanso de agenteB.
 // Para cada fecha, reasigna los turnos de A→B y de B→A, evitando filas duplicadas.
 export async function intercambiarDescansosCompleto(agenteA, dateA, agenteB, dateB, supervisorNombre, motivo) {
-  // Dos intercambios independientes de una sola fecha cada uno, en vez de cruzar
-  // las 4 filas de las 2 fechas en una sola operación (ver _swapUnaFecha).
-  await _swapUnaFecha(dateA, agenteA, agenteB)
-  if (dateB !== dateA) await _swapUnaFecha(dateB, agenteA, agenteB)
+  // Reutiliza la misma lógica atómica de _aplicarSwapTurnos (verifica las 2
+  // fechas antes de escribir nada, y revierte automáticamente si la segunda
+  // fecha falla después de aplicar la primera).
+  await _aplicarSwapTurnos({
+    turno_sol_fecha: dateA, turno_rec_fecha: dateB,
+    solicitante_nombre: agenteA, receptor_nombre: agenteB,
+  })
   const { error: ae } = await supabase.from('vip_cambios_turno').insert({
     solicitante_nombre: agenteA,
     receptor_nombre:    agenteB,
