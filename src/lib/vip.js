@@ -1085,7 +1085,11 @@ async function _aplicarSwapTurnos(cambio) {
         ...check1.filasA.map(r => _actualizarAgenteOTirar(r.id, A).catch(() => {})),
         ...check1.filasB.map(r => _actualizarAgenteOTirar(r.id, B).catch(() => {})),
       ])
-      throw new Error(`No se pudo completar el cambio del ${fecha2} — se revirtió el del ${fecha1} para no dejarlo a medias. Detalle: ${e.message}`)
+      throw new Error(
+        `El cambio de descanso entre ${A} y ${B} NO se aplicó (se revirtió todo para no dejarlo a medias). ` +
+        `El ${fecha2} no se pudo completar — ${e.message} ` +
+        `Vuelvan a intentar la solicitud del cambio de turno entre ${A} y ${B}.`
+      )
     }
   }
 }
@@ -1331,11 +1335,12 @@ export async function aplicarCambioEnSheet(url, secret, cambio) {
         revertido = false
       }
       throw new Error(
-        `No se pudo aplicar el cambio del ${fecha2} en el Sheet` +
+        `El cambio de ${A}/${B} ya quedó bien aplicado en la base de datos (la malla es correcta), ` +
+        `pero no se pudo sincronizar el ${fecha2} en el Google Sheet` +
         (revertido
-          ? ` (se revirtió el del ${fecha1} para no dejarlo a medias).`
-          : ` — TAMPOCO se pudo revertir el del ${fecha1}: revisa el Sheet manualmente para ${A}/${B} en esas fechas.`) +
-        ` Detalle: ${e.message}`
+          ? ` (se revirtió el del ${fecha1} en el Sheet para no dejarlo a medias ahí).`
+          : ` — TAMPOCO se pudo revertir el del ${fecha1} en el Sheet: revisa manualmente las filas de ${A}/${B} en ${fecha1} y ${fecha2}.`) +
+        ` Usa "reenviar al Sheet" desde Cambios recientes para reintentar la sincronización. Detalle: ${e.message}`
       )
     }
   }
