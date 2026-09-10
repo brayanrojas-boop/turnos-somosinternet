@@ -1334,6 +1334,35 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                       </div>
                     )
                   })()}
+
+                  {/* Hora extra opcional — después del turno_fin, aparte del bloque principal
+                      para que quede claro que no es horario obligatorio */}
+                  {turno && !esD && turno.overtime_fin && (() => {
+                    const oTop = calTop(calDec(turno.turno_fin))
+                    const oH   = Math.max(calPx(turno.turno_fin, turno.overtime_fin), 14)
+                    return (
+                      <div className="absolute inset-x-0.5 rounded shadow-sm overflow-hidden z-10 border-2 border-amber-500 bg-amber-300 flex items-center gap-0.5 px-1"
+                        style={{ top: oTop, height: oH }}
+                        title={`Extra opcional: ${formatH(turno.turno_fin)}–${formatH(turno.overtime_fin)}`}>
+                        <span className="text-[9px] leading-none">⏱️</span>
+                        {oH >= 18 && <span className="text-[8px] text-amber-900 font-semibold truncate">Extra opcional</span>}
+                      </div>
+                    )
+                  })()}
+
+                  {/* Desconexión programada ("hora fantasma") al final del turno */}
+                  {turno && !esD && turno.desconexion_inicio && turno.desconexion_fin && (() => {
+                    const dTop = calTop(calDec(turno.desconexion_inicio))
+                    const dH   = Math.max(calPx(turno.desconexion_inicio, turno.desconexion_fin), 14)
+                    return (
+                      <div className="absolute inset-x-0.5 rounded shadow-sm overflow-hidden z-10 border-2 border-sky-500 bg-sky-300 flex items-center gap-0.5 px-1"
+                        style={{ top: dTop, height: dH }}
+                        title={`Desconexión: ${formatH(turno.desconexion_inicio)}–${formatH(turno.desconexion_fin)}`}>
+                        <span className="text-[9px] leading-none">🔌</span>
+                        {dH >= 18 && <span className="text-[8px] text-sky-900 font-semibold truncate">Desconexión</span>}
+                      </div>
+                    )
+                  })()}
                 </div>
               )
             })}
