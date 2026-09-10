@@ -981,7 +981,7 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
       setElapsed(newElapsed)
       if (ps && newElapsed >= ps && !notifEndSentRef.current) {
         notifEndSentRef.current = true
-        const label = pausaActiva.tipo === 'break' ? 'pausa' : 'almuerzo'
+        const label = 'pausa'
         sendNotif(`⏰ Tiempo de ${label} cumplido`, 'Recuerda finalizar tu pausa.')
         showAlert(`⏰ Tu tiempo de ${label} se cumplió. ¡Recuerda finalizarla!`, 'red')
       }
@@ -1007,8 +1007,8 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
           showAlert(`${emoji} Recuerda: tu ${label} comienza en ${diff} minuto${diff !== 1 ? 's' : ''}`, 'orange')
         }
       }
-      check('break',   turnoHoy.break_inicio,  'pausa',    '☕')
-      check('almuerzo', turnoHoy.lunch_inicio, 'almuerzo', '🍽️')
+      check('break',   turnoHoy.break_inicio,  'pausa', '☕')
+      check('almuerzo', turnoHoy.lunch_inicio, 'pausa', '🍽️')
     }
     checkReminder()
     const id = setInterval(checkReminder, 30_000)
@@ -1066,8 +1066,8 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
         </p>
         {turnoHoy && (
           <div className="flex flex-wrap gap-3 text-xs text-gray-400">
-            {turnoHoy.break_inicio  && <span>Pausa: {formatH(turnoHoy.break_inicio)}–{formatH(turnoHoy.break_fin)}</span>}
-            {turnoHoy.lunch_inicio  && <span>Almuerzo: {formatH(turnoHoy.lunch_inicio)}–{formatH(turnoHoy.lunch_fin)}</span>}
+            {turnoHoy.break_inicio  && <span>☕ Pausa: {formatH(turnoHoy.break_inicio)}–{formatH(turnoHoy.break_fin)}</span>}
+            {turnoHoy.lunch_inicio  && <span>🍽️ Pausa: {formatH(turnoHoy.lunch_inicio)}–{formatH(turnoHoy.lunch_fin)}</span>}
           </div>
         )}
       </div>
@@ -1077,7 +1077,7 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
         <div className="flex items-center gap-4">
           <div className="flex-1">
             <p className="text-sm font-semibold text-orange-800">
-              {pausaActiva.tipo === 'break' ? '☕ En pausa' : '🍽️ En almuerzo'}
+              {pausaActiva.tipo === 'break' ? '☕ En pausa' : '🍽️ En pausa'}
             </p>
             <div className="flex items-center gap-2 mt-1">
               <span className={`text-2xl font-mono font-bold tabular-nums ${sobrepasado ? 'text-red-600 animate-pulse' : 'text-gray-800'}`}>
@@ -1115,7 +1115,7 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
           <button onClick={() => handleIniciar('almuerzo')} disabled={iniciando != null}
             className="flex items-center gap-1.5 px-3 py-2 text-sm font-medium bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded-xl disabled:opacity-50 transition">
             {iniciando === 'almuerzo' ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Play className="w-4 h-4" />}
-            Iniciar almuerzo
+            Iniciar pausa (almuerzo)
           </button>
         </div>
       )}
@@ -1601,10 +1601,13 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
     return 'en_turno'
   }
 
+  // en_almuerzo se mantiene como valor interno de getEstado (para saber cuál de
+  // las 2 ventanas horarias está activa y resaltar la barra correcta), pero de
+  // cara al usuario almuerzo y pausa son "un solo tipo": mismo label y color.
   const ESTADO_STYLE = {
     en_turno:    { cls: 'bg-green-100 text-green-700', label: 'En turno' },
     en_pausa:    { cls: 'bg-amber-100 text-amber-700', label: 'En pausa' },
-    en_almuerzo: { cls: 'bg-teal-100 text-teal-700',   label: 'Almuerzo' },
+    en_almuerzo: { cls: 'bg-amber-100 text-amber-700', label: 'En pausa' },
     por_iniciar: { cls: 'bg-gray-100 text-gray-400',   label: 'Por iniciar' },
     finalizado:  { cls: 'bg-gray-100 text-gray-400',   label: 'Finalizado' },
   }
@@ -1647,14 +1650,13 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
     ? `${((nowAdj - rangeStart) / span) * 100}%`
     : null
 
-  // Resumen de estados (solo hoy)
-  let cntTurno = 0, cntPausa = 0, cntAlmuerzo = 0
+  // Resumen de estados (solo hoy) — pausa y almuerzo cuentan juntos, un solo tipo.
+  let cntTurno = 0, cntPausa = 0
   if (esHoyFlag) {
     for (const t of sorted) {
       const e = getEstado(t)
       if (e === 'en_turno') cntTurno++
-      else if (e === 'en_pausa') cntPausa++
-      else if (e === 'en_almuerzo') cntAlmuerzo++
+      else if (e === 'en_pausa' || e === 'en_almuerzo') cntPausa++
     }
   }
 
@@ -1667,7 +1669,6 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
             <span className="text-gray-400">Ahora:</span>
             {cntTurno > 0 && <span className="flex items-center gap-1 bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block animate-pulse"/>{cntTurno} en turno</span>}
             {cntPausa > 0 && <span className="flex items-center gap-1 bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 rounded-full bg-amber-400 inline-block"/>{cntPausa} en pausa</span>}
-            {cntAlmuerzo > 0 && <span className="flex items-center gap-1 bg-teal-100 text-teal-700 px-2 py-0.5 rounded-full font-medium"><span className="w-1.5 h-1.5 rounded-full bg-teal-400 inline-block"/>{cntAlmuerzo} en almuerzo</span>}
           </div>
           <button
             onClick={() => setSoloActivos(v => !v)}
@@ -1746,13 +1747,13 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
                   {/* Pausa */}
                   {bIni !== null && bFin !== null && (
                     <div className={`absolute top-0 h-full rounded cursor-help ${estado === 'en_pausa' ? 'bg-amber-500' : 'bg-amber-400/80'}`}
-                      title={`Pausa: ${formatH(t.break_inicio)}–${formatH(t.break_fin)}`}
+                      title={`☕ Pausa: ${formatH(t.break_inicio)}–${formatH(t.break_fin)}`}
                       style={{ left: pctLeft(bIni), width: pctWidth(bIni, bFin) }} />
                   )}
-                  {/* Almuerzo */}
+                  {/* Almuerzo — mismo tipo "pausa", mismo color, distinto emoji en el tooltip */}
                   {lIni !== null && lFin !== null && (
-                    <div className={`absolute top-0 h-full rounded cursor-help ${estado === 'en_almuerzo' ? 'bg-teal-500' : 'bg-emerald-400/80'}`}
-                      title={`Almuerzo: ${formatH(t.lunch_inicio)}–${formatH(t.lunch_fin)}`}
+                    <div className={`absolute top-0 h-full rounded cursor-help ${estado === 'en_almuerzo' ? 'bg-amber-500' : 'bg-amber-400/80'}`}
+                      title={`🍽️ Pausa: ${formatH(t.lunch_inicio)}–${formatH(t.lunch_fin)}`}
                       style={{ left: pctLeft(lIni), width: pctWidth(lIni, lFin) }} />
                   )}
                   {/* Hora extra opcional — aparte del turno, para que no se confunda con horario obligatorio */}
@@ -1793,7 +1794,6 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
         <div className="pl-28 mt-3 flex items-center gap-4 text-[10px] text-gray-400">
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-primary-500/75 rounded inline-block"/>Turno</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-400 rounded inline-block"/>Pausa</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 bg-emerald-400 rounded inline-block"/>Almuerzo</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-300 border border-amber-500/50 rounded inline-block"/>Extra opcional</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-sky-300 border border-sky-500/50 rounded inline-block"/>Desconexión</span>
           {esHoyFlag && <span className="flex items-center gap-1"><span className="w-px h-3 bg-red-400 inline-block"/>Hora actual</span>}
@@ -1957,13 +1957,15 @@ function BreaksMonitor() {
     const minLeft = e.fin  > now ? (e.fin  - now) * 60 : null
     const urgent  = variante === 'proximo' && minAway !== null && minAway <= 15
     const bg = variante === 'activo'
-      ? (e.tipo === 'pausa' ? 'bg-amber-50 border-amber-200' : 'bg-teal-50 border-teal-200')
+      ? 'bg-amber-50 border-amber-200'
       : variante === 'proximo' && urgent ? 'bg-orange-50 border-orange-200'
       : variante === 'proximo' ? 'bg-white border-gray-200'
       : 'bg-gray-50/50 border-gray-100'
+    // Almuerzo y break son "un solo tipo" de cara al usuario: mismo label, mismo
+    // color, solo cambia el emoji para distinguir de un vistazo cuál ventana es.
     const tipoBadge = e.tipo === 'pausa'
-      ? <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">☕ Break</span>
-      : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-teal-100 text-teal-700">🍽️ Almuerzo</span>
+      ? <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">☕ Pausa</span>
+      : <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-700">🍽️ Pausa</span>
     return (
       <div className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${bg}`}>
         <div className="flex-1 min-w-0">
@@ -2129,7 +2131,7 @@ function BreaksMonitor() {
           {eventos.length === 0 && (
             <div className="text-center py-10 text-gray-400">
               <Clock className="w-8 h-8 mx-auto mb-2 opacity-30"/>
-              <p className="text-sm">No hay breaks ni almuerzos programados para hoy</p>
+              <p className="text-sm">No hay pausas programadas para hoy</p>
             </div>
           )}
         </div>
@@ -2231,7 +2233,7 @@ function BreaksMonitor() {
                     {terminadas.map(p => (
                       <tr key={p.id} className={`hover:bg-gray-50 ${(p.excedido_min ?? 0) > 0 ? 'bg-red-50/40' : ''}`}>
                         <td className="px-3 py-2 font-medium text-gray-800">{p.agente?.split(' ').slice(0,2).join(' ')}</td>
-                        <td className="px-3 py-2">{p.tipo === 'break' ? '☕ Break' : '🍽️ Almuerzo'}</td>
+                        <td className="px-3 py-2">{p.tipo === 'break' ? '☕ Pausa' : '🍽️ Pausa'}</td>
                         <td className="px-3 py-2 font-mono text-gray-600">{fmtHM(p.inicio_real)}</td>
                         <td className="px-3 py-2 font-mono text-gray-600">{fmtHM(p.fin_real)}</td>
                         <td className="px-3 py-2 font-semibold">{p.duracion_real ?? '—'} min</td>
