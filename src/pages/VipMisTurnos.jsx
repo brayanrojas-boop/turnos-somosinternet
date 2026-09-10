@@ -1615,10 +1615,15 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
     ? sortedAll.filter(t => ESTADOS_ACTIVOS.has(getEstado(t)))
     : sortedAll
 
-  // Rango temporal basado en los agentes VISIBLES (sorted), no en todos
+  // Rango temporal basado en los agentes VISIBLES (sorted), no en todos.
+  // Incluye overtime_fin/desconexion_fin en el cálculo del rango para que la
+  // barra no se corte si alguien tiene hora extra o desconexión programada.
   const rangeSource = sorted.length > 0 ? sorted : activos
   const starts = rangeSource.map(t => toHDec(t.turno_inicio)).filter(v => v !== null)
-  const ends   = rangeSource.map(t => toHDec(t.turno_fin)).filter(v => v !== null).map(h => h < 6 ? h + 24 : h)
+  const finesPosibles = rangeSource.flatMap(t => [
+    toHDec(t.turno_fin), toHDec(t.overtime_fin), toHDec(t.desconexion_fin),
+  ]).filter(v => v !== null)
+  const ends = finesPosibles.map(h => h < 6 ? h + 24 : h)
   const rangeStart = starts.length ? Math.max(0, Math.floor(Math.min(...starts)) - 1) : 6
   const rangeEnd   = ends.length   ? Math.min(27, Math.ceil(Math.max(...ends))   + 1) : 23
   const span       = Math.max(rangeEnd - rangeStart, 1)
@@ -1701,6 +1706,9 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
             const bFin = toHDec(t.break_fin)
             const lIni = toHDec(t.lunch_inicio)
             const lFin = toHDec(t.lunch_fin)
+            const otFin = toHDec(t.overtime_fin)
+            const dIni  = toHDec(t.desconexion_inicio)
+            const dFin  = toHDec(t.desconexion_fin)
             const estado = getEstado(t)
             const est = estado ? ESTADO_STYLE[estado] : null
             return (
@@ -1747,6 +1755,18 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
                       title={`Almuerzo: ${formatH(t.lunch_inicio)}–${formatH(t.lunch_fin)}`}
                       style={{ left: pctLeft(lIni), width: pctWidth(lIni, lFin) }} />
                   )}
+                  {/* Hora extra opcional — aparte del turno, para que no se confunda con horario obligatorio */}
+                  {fin !== null && otFin !== null && (
+                    <div className="absolute top-0 h-full rounded cursor-help bg-amber-300 border border-amber-500/50"
+                      title={`Extra opcional: ${formatH(t.turno_fin)}–${formatH(t.overtime_fin)}`}
+                      style={{ left: pctLeft(fin), width: pctWidth(fin, otFin) }} />
+                  )}
+                  {/* Desconexión programada ("hora fantasma") al final del turno */}
+                  {dIni !== null && dFin !== null && (
+                    <div className="absolute top-0 h-full rounded cursor-help bg-sky-300 border border-sky-500/50"
+                      title={`Desconexión: ${formatH(t.desconexion_inicio)}–${formatH(t.desconexion_fin)}`}
+                      style={{ left: pctLeft(dIni), width: pctWidth(dIni, dFin) }} />
+                  )}
                 </div>
                 {esAdmin && (
                   <button onClick={() => onEditar(t)}
@@ -1774,6 +1794,8 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-primary-500/75 rounded inline-block"/>Turno</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-400 rounded inline-block"/>Pausa</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-emerald-400 rounded inline-block"/>Almuerzo</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-300 border border-amber-500/50 rounded inline-block"/>Extra opcional</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 bg-sky-300 border border-sky-500/50 rounded inline-block"/>Desconexión</span>
           {esHoyFlag && <span className="flex items-center gap-1"><span className="w-px h-3 bg-red-400 inline-block"/>Hora actual</span>}
         </div>
       </div>
