@@ -1357,9 +1357,9 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                     return (
                       <div className="absolute inset-x-0.5 rounded shadow-sm overflow-hidden z-10 border-2 border-sky-500 bg-sky-300 flex items-center gap-0.5 px-1"
                         style={{ top: dTop, height: dH }}
-                        title={`Desconexión: ${formatH(turno.desconexion_inicio)}–${formatH(turno.desconexion_fin)}`}>
+                        title={`Desconexión de lunch: ${formatH(turno.desconexion_inicio)}–${formatH(turno.desconexion_fin)}`}>
                         <span className="text-[9px] leading-none">🔌</span>
-                        {dH >= 18 && <span className="text-[8px] text-sky-900 font-semibold truncate">Desconexión</span>}
+                        {dH >= 18 && <span className="text-[8px] text-sky-900 font-semibold truncate">Desconexión de lunch</span>}
                       </div>
                     )
                   })()}
@@ -1794,7 +1794,7 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
                   {/* Desconexión programada ("hora fantasma") al final del turno */}
                   {dIni !== null && dFin !== null && (
                     <div className="absolute top-0 h-full rounded cursor-help bg-sky-300 border border-sky-500/50"
-                      title={`Desconexión: ${formatH(t.desconexion_inicio)}–${formatH(t.desconexion_fin)}`}
+                      title={`Desconexión de lunch: ${formatH(t.desconexion_inicio)}–${formatH(t.desconexion_fin)}`}
                       style={{ left: pctLeft(dIni), width: pctWidth(dIni, dFin) }} />
                   )}
                 </div>
@@ -1824,7 +1824,7 @@ function TimelineDay({ turnos, esAdmin, onEditar, hoy: esHoyFlag }) {
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-primary-500/75 rounded inline-block"/>Turno</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-400 rounded inline-block"/>Pausa</span>
           <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-300 border border-amber-500/50 rounded inline-block"/>Extra opcional</span>
-          <span className="flex items-center gap-1"><span className="w-3 h-2 bg-sky-300 border border-sky-500/50 rounded inline-block"/>Desconexión</span>
+          <span className="flex items-center gap-1"><span className="w-3 h-2 bg-sky-300 border border-sky-500/50 rounded inline-block"/>Desconexión de lunch</span>
           {esHoyFlag && <span className="flex items-center gap-1"><span className="w-px h-3 bg-red-400 inline-block"/>Hora actual</span>}
         </div>
       </div>
@@ -3306,7 +3306,7 @@ export default function VipMisTurnos() {
                                           {/* "Hora fantasma": desconexión programada al final del turno (no es lunch real). */}
                                           {turno.desconexion_inicio && (
                                             <span className="text-[10px] text-sky-600 tabular-nums block leading-tight">
-                                              🔌 Desconexión {formatH(turno.desconexion_inicio)}–{formatH(turno.desconexion_fin)}
+                                              🔌 Desconexión de lunch {formatH(turno.desconexion_inicio)}–{formatH(turno.desconexion_fin)}
                                             </span>
                                           )}
                                         </div>
