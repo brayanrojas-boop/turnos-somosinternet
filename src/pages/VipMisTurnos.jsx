@@ -3243,6 +3243,19 @@ export default function VipMisTurnos() {
                                               {turno.lunch_inicio && <>🍽️ {formatH(turno.lunch_inicio)}–{formatH(turno.lunch_fin)}</>}
                                             </span>
                                           )}
+                                          {/* Hora extra: opcional, aceptada por el analista — NO es parte del turno
+                                              programado, por eso va aparte y con color distinto (ámbar). */}
+                                          {turno.overtime_fin && (
+                                            <span className="text-[10px] text-amber-600 tabular-nums block leading-tight font-medium">
+                                              ⏱️ Extra opcional {formatH(turno.turno_fin)}–{formatH(turno.overtime_fin)}
+                                            </span>
+                                          )}
+                                          {/* "Hora fantasma": desconexión programada al final del turno (no es lunch real). */}
+                                          {turno.desconexion_inicio && (
+                                            <span className="text-[10px] text-sky-600 tabular-nums block leading-tight">
+                                              🔌 Desconexión {formatH(turno.desconexion_inicio)}–{formatH(turno.desconexion_fin)}
+                                            </span>
+                                          )}
                                         </div>
                                     }
                                     {!esMio && futuro && (

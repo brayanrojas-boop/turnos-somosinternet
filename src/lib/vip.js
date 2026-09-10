@@ -294,6 +294,30 @@ function _fecha(val) {
   return null
 }
 
+// Suma minutos a una hora "HH:MM" (usado para calcular el "_fin" de los breaks
+// del formato nuevo del Sheet, que solo traen la hora de inicio). Envuelve el
+// día si se pasa de medianoche.
+function _sumarMinutos(hora, minutos) {
+  if (!hora) return null
+  const [h, m] = hora.split(':').map(Number)
+  const total = ((h * 60 + m + minutos) % 1440 + 1440) % 1440
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`
+}
+
+// Normaliza un encabezado de columna del Sheet para compararlo sin depender de
+// mayúsculas/acentos (ej. "Ubicación" y "ubicacion" deben matchear igual).
+function _normalizarHeader(h) {
+  return String(h ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[áàäâ]/g, 'a')
+    .replace(/[éèëê]/g, 'e')
+    .replace(/[íìïî]/g, 'i')
+    .replace(/[óòöô]/g, 'o')
+    .replace(/[úùüû]/g, 'u')
+    .replace(/ñ/g, 'n')
+}
+
 function _sheetACsvUrl(url) {
   if (url.includes('/pub?') || url.includes('output=csv')) return url
   const m = url.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/)
@@ -323,26 +347,55 @@ export async function importarTurnosDesdeSheet(url) {
   const filas = _parsearCSV(texto)
   if (filas.length < 2) throw new Error('No hay datos en el Sheet.')
 
-  const enc = filas[0].map(h => h.toLowerCase().trim())
-  const col = h => enc.indexOf(h)
-  const emailIdx = enc.indexOf('email')
+  const enc = filas[0].map(_normalizarHeader)
+  const col = h => enc.indexOf(_normalizarHeader(h))
+  const emailIdx = col('email')
+
+  // Formato nuevo (desde sep-2026): los breaks solo traen hora de inicio (la
+  // duración va en el nombre de la columna) y "Lunch_inicio/Lunch_fin" dejó de
+  // ser el lunch real para pasar a ser la "hora fantasma" — una desconexión
+  // programada al final del turno. El lunch real ahora es break_2_15min +
+  // break_3_15min (los mismos 30 min de siempre, partidos en 2 columnas).
+  // Se detecta el formato por la presencia de "break_2_15min"; si no está,
+  // se asume el formato viejo (break_inicio/break_fin y lunch_inicio/lunch_fin
+  // tal como están, sin hora fantasma) — así conviven ambos formatos según
+  // qué mes se esté importando.
+  const esFormatoNuevo = col('break_2_15min') >= 0
 
   const registros = []
   for (let i = 1; i < filas.length; i++) {
     const v = filas[i]
     if (!v[col('agente')]?.trim() && !_fecha(v[col('fecha')])) continue
+
+    let breakInicio, breakFin, lunchInicio, lunchFin, desconexionInicio, desconexionFin
+    if (esFormatoNuevo) {
+      breakInicio = _hora(v[col('break_1_10min')])
+      breakFin    = _sumarMinutos(breakInicio, 10)
+      lunchInicio = _hora(v[col('break_2_15min')])
+      lunchFin    = _sumarMinutos(_hora(v[col('break_3_15min')]), 15)
+      desconexionInicio = _hora(v[col('lunch_inicio')])
+      desconexionFin    = _hora(v[col('lunch_fin')])
+    } else {
+      breakInicio = _hora(v[col('break_inicio')])
+      breakFin    = _hora(v[col('break_fin')])
+      lunchInicio = _hora(v[col('lunch_inicio')])
+      lunchFin    = _hora(v[col('lunch_fin')])
+      desconexionInicio = null
+      desconexionFin    = null
+    }
+
     registros.push({
       fecha:             _fecha(v[col('fecha')]),
-      dia_semana:        v[col('dia_semana')]?.trim() || null,
+      dia_semana:        v[col('dia_semana')]?.trim() || v[col('dia')]?.trim() || null,
       linea_atencion:    _normLinea(v[col('linea_atencion')]?.trim() || null),
       agente:            v[col('agente')]?.trim() || null,
       novedad:           v[col('novedad')]?.trim() || null,
       turno_inicio:      _hora(v[col('turno_inicio')]),
       turno_fin:         _hora(v[col('turno_fin')]),
-      break_inicio:      _hora(v[col('break_inicio')]),
-      break_fin:         _hora(v[col('break_fin')]),
-      lunch_inicio:      _hora(v[col('lunch_inicio')]),
-      lunch_fin:         _hora(v[col('lunch_fin')]),
+      break_inicio:      breakInicio,
+      break_fin:         breakFin,
+      lunch_inicio:      lunchInicio,
+      lunch_fin:         lunchFin,
       horas_programadas: _numero(v[col('horas_programadas')]),
       entrada:           _hora(v[col('entrada')]),
       hd:                _numero(v[col('hd')]),
@@ -356,6 +409,10 @@ export async function importarTurnosDesdeSheet(url) {
       tipo_turno:        v[col('tipo turno')]?.trim() || null,
       hd_:               _numero(v[col('hd_')]),
       hn_:               _numero(v[col('hn_')]),
+      ubicacion:         v[col('ubicacion')]?.trim() || null,
+      overtime_fin:      _hora(v[col('overtime accepted')]),
+      desconexion_inicio: desconexionInicio,
+      desconexion_fin:    desconexionFin,
       ...(emailIdx >= 0 ? { email: v[emailIdx]?.trim() || null } : {}),
     })
   }
