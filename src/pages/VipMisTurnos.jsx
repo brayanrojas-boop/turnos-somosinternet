@@ -1153,7 +1153,7 @@ function PausaWidget({ turnoHoy, nombreEfectivo }) {
   )
 }
 
-function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, onCambiar, onDescanso }) {
+function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, onCambiar, onDescanso, esAdmin }) {
   const nowDec = (() => { const n = new Date(); return n.getHours() + n.getMinutes() / 60 })()
   const nowTop = calTop(nowDec)
 
@@ -1263,7 +1263,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                     <div className="absolute inset-x-0.5 top-1 bottom-1 rounded border-2 border-dashed border-emerald-400 bg-emerald-50 flex flex-col items-center justify-center gap-0.5 p-1">
                       <span className="text-sm">🌙</span>
                       <span className="text-[9px] font-semibold text-emerald-700 text-center">Descanso</span>
-                      {!tieneActiva && esFuturo && (
+                      {esAdmin && !tieneActiva && esFuturo && (
                         <button onClick={() => onDescanso(turno)}
                           className="text-[8px] bg-emerald-200 hover:bg-emerald-300 text-emerald-800 px-1 py-0.5 rounded transition mt-0.5">
                           Cambiar →
@@ -1318,7 +1318,7 @@ function CalendarioSemana({ diasSemana, misTurnos, solicitudes, nombre, hoyStr, 
                           {turno.linea_atencion && (
                             <p className="text-[8px] truncate font-medium" style={{ color: color.light }}>{turno.linea_atencion}</p>
                           )}
-                          {!tieneActiva && esFuturo && tH >= CAL_PX_H && (
+                          {esAdmin && !tieneActiva && esFuturo && tH >= CAL_PX_H && (
                             <button onClick={() => onCambiar(turno)}
                               className="text-[8px] text-white px-1 py-0.5 rounded mt-0.5 transition block w-full text-left"
                               style={{ backgroundColor: 'rgba(255,255,255,0.2)' }}
@@ -3084,6 +3084,7 @@ export default function VipMisTurnos() {
                     hoyStr={hoyStr}
                     onCambiar={setTPC}
                     onDescanso={setDM}
+                    esAdmin={esAdmin}
                   />
                 </div>
               </div>
@@ -3311,7 +3312,7 @@ export default function VipMisTurnos() {
                                           )}
                                         </div>
                                     }
-                                    {!esMio && futuro && (
+                                    {esAdmin && !esMio && futuro && (
                                       bloq
                                         ? <span className="text-xs text-gray-300 px-2 py-1">{t('turnos.bloqueado')}</span>
                                         : <button onClick={() => setTO(turno)}
@@ -3319,7 +3320,7 @@ export default function VipMisTurnos() {
                                             <ArrowLeftRight className="w-3 h-3"/> {t('turnos.solicitar')}
                                           </button>
                                     )}
-                                    {esMio && futuro && (
+                                    {esAdmin && esMio && futuro && (
                                       <button onClick={() => setTPC(turno)}
                                         className="flex items-center gap-1 text-xs text-gray-600 bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded-lg transition">
                                         <ArrowLeftRight className="w-3 h-3"/> {t('turnos.cambiar')}
@@ -3375,16 +3376,22 @@ export default function VipMisTurnos() {
                             </div>
                           </div>
                           {s.motivo && <p className="text-xs text-gray-500 italic">"{s.motivo}"</p>}
-                          <div className="flex gap-2">
-                            <button onClick={() => handleResponder(s.id, true)} disabled={procesando === s.id}
-                              className="flex-1 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
-                              <CheckCircle className="w-3.5 h-3.5"/> {t('turnos.aceptar')}
-                            </button>
-                            <button onClick={() => handleResponder(s.id, false)} disabled={procesando === s.id}
-                              className="flex-1 py-2 border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-1.5">
-                              <XCircle className="w-3.5 h-3.5"/> {t('turnos.rechazar')}
-                            </button>
-                          </div>
+                          {esAdmin ? (
+                            <div className="flex gap-2">
+                              <button onClick={() => handleResponder(s.id, true)} disabled={procesando === s.id}
+                                className="flex-1 py-2 bg-green-600 text-white rounded-lg text-xs font-medium hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                                <CheckCircle className="w-3.5 h-3.5"/> {t('turnos.aceptar')}
+                              </button>
+                              <button onClick={() => handleResponder(s.id, false)} disabled={procesando === s.id}
+                                className="flex-1 py-2 border border-gray-300 rounded-lg text-xs font-medium hover:bg-gray-50 disabled:opacity-50 flex items-center justify-center gap-1.5">
+                                <XCircle className="w-3.5 h-3.5"/> {t('turnos.rechazar')}
+                              </button>
+                            </div>
+                          ) : (
+                            <p className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                              Los cambios de turno ahora los aplica un administrador. Pídele a tu supervisor que lo gestione.
+                            </p>
+                          )}
                           {procesando === s.id && respProgreso !== null && (
                             <div className="space-y-1.5 pt-1">
                               <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
