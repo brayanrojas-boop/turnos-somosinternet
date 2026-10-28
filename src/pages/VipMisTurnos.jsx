@@ -2414,6 +2414,10 @@ export default function VipMisTurnos() {
   const [filtroDesde, setFD]   = useState('')
   const [filtroHasta, setFH]   = useState('')
 
+  // Exportar turnos programados por mes (respeta los filtros de analista/línea activos)
+  const [mesExport, setMesExport]   = useState(() => localDateISO().slice(0, 7))
+  const [exportando, setExportando] = useState(false)
+
   // Config
   const [showConfig, setShowConfig]         = useState(false)
   const [scriptUrl, setScriptUrl]           = useState(() => localStorage.getItem(SCRIPT_URL_KEY) ?? '')
@@ -2519,6 +2523,53 @@ export default function VipMisTurnos() {
   }, [toISO(lunes), toISO(domingo), nombreEfectivo, esAdmin, filtroDesde, filtroHasta])
 
   useEffect(() => { cargar() }, [cargar])
+
+  // Exporta a CSV los turnos programados de un mes completo (no depende de la semana
+  // o rango que esté viendo la malla en pantalla) — respeta el analista/línea que
+  // ya estén filtrados, para poder sacar "el mes de Juan" o "el mes completo de todos".
+  async function handleExportarMes() {
+    if (!mesExport) return
+    setExportando(true)
+    try {
+      const [anio, mes] = mesExport.split('-').map(Number)
+      const inicio = `${mesExport}-01`
+      const fin = `${mesExport}-${String(new Date(anio, mes, 0).getDate()).padStart(2, '0')}`
+      const turnos = await getTurnosSemana(inicio, fin)
+      const filtrados = turnos.filter(turno =>
+        (!filtroAnalista || turno.agente?.toLowerCase().includes(filtroAnalista.toLowerCase())) &&
+        (!filtroLinea || turno.linea_atencion === filtroLinea)
+      )
+      if (filtrados.length === 0) {
+        alert('No hay turnos programados para ese mes con los filtros actuales.')
+        return
+      }
+      const header = [
+        'Fecha', 'Día', 'Analista', 'Línea', 'Turno inicio', 'Turno fin', 'Horas programadas',
+        'Break inicio', 'Break fin', 'Almuerzo inicio', 'Almuerzo fin',
+        'Desconexión inicio', 'Desconexión fin', 'Hora extra fin', 'Ubicación', 'Novedad',
+      ]
+      const rows = filtrados.map(t => [
+        t.fecha, t.dia_semana ?? '', t.agente ?? '', t.linea_atencion ?? '',
+        formatH(t.turno_inicio), formatH(t.turno_fin), t.horas_programadas ?? '',
+        formatH(t.break_inicio), formatH(t.break_fin), formatH(t.lunch_inicio), formatH(t.lunch_fin),
+        formatH(t.desconexion_inicio), formatH(t.desconexion_fin), formatH(t.overtime_fin),
+        t.ubicacion ?? '', t.novedad ?? '',
+      ])
+      const csv = [header, ...rows]
+        .map(r => r.map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(','))
+        .join('\n')
+      const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8;' })
+      const url = URL.createObjectURL(blob)
+      const sufijo = filtroAnalista ? `_${filtroAnalista.trim().replace(/[^a-zA-Z0-9]+/g, '-')}` : ''
+      const a = document.createElement('a')
+      a.href = url; a.download = `turnos_${mesExport}${sufijo}.csv`; a.click()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      alert('No se pudo exportar: ' + e.message)
+    } finally {
+      setExportando(false)
+    }
+  }
 
   useEffect(() => {
     if (nombreEfectivo) getMisHorasExtra(nombreEfectivo).then(setMisHE)
@@ -3205,6 +3256,22 @@ export default function VipMisTurnos() {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"
                     />
                   </div>
+                </div>
+                <div className="flex items-end gap-2 pt-1 border-t border-gray-100">
+                  <div className="flex-1 max-w-[180px]">
+                    <label className="text-xs text-gray-500 block mb-1">Exportar turnos del mes</label>
+                    <input type="month" value={mesExport} onChange={e => setMesExport(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary-500 bg-white"/>
+                  </div>
+                  <button onClick={handleExportarMes} disabled={exportando}
+                    className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 rounded-lg transition disabled:opacity-50 shrink-0">
+                    <Download className="w-3.5 h-3.5"/> {exportando ? 'Exportando…' : 'Exportar CSV'}
+                  </button>
+                  {(filtroAnalista || filtroLinea) && (
+                    <span className="text-[11px] text-gray-400 pb-2">
+                      (con los filtros de {filtroAnalista && 'analista'}{filtroAnalista && filtroLinea && ' y '}{filtroLinea && 'línea'} activos)
+                    </span>
+                  )}
                 </div>
                 {(filtroAnalista || filtroLinea || tieneRango) && (
                   <div className="flex items-center gap-3 flex-wrap">
